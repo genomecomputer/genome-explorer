@@ -8,13 +8,18 @@ import tarfile
 import tempfile
 import time
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+import duckdb
 
 
 SUPPORTED_SCHEMA_VERSIONS = {"1.0.0"}
 CHUNK_SIZE = 1024 * 1024
 MAX_MANIFEST_BYTES = 5 * 1024 * 1024
+RECEIPT_FILENAME = ".validation-receipt.json"
+RECEIPT_VERSION = 1
 COORDINATE_PATTERN = re.compile(
     r"^(?:chr)?(?P<chrom>[0-9]+|X|Y|M):(?P<pos>[0-9]+)"
     r"(?::(?P<ref>[ACGT]+):(?P<alt>[ACGT]+))?$",
@@ -37,6 +42,8 @@ class WorkspaceReport:
     validated_entries: int
     elapsed_seconds: float
     reused_workspace: bool
+    validation_mode: str
+    validated_at: str
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -104,6 +111,101 @@ def _manifest_identity(manifest_bytes: bytes) -> str:
     return hashlib.sha256(manifest_bytes).hexdigest()[:20]
 
 
+def _archive_fingerprint(archive: Path) -> Dict[str, Any]:
+    metadata = archive.stat()
+    return {
+        "path": str(archive),
+        "size": metadata.st_size,
+        "mtime_ns": metadata.st_mtime_ns,
+        "device": metadata.st_dev,
+        "inode": metadata.st_ino,
+    }
+
+
+def _workspace_entry_size(path: Path) -> Optional[int]:
+    if path.is_symlink():
+        return None
+    if path.is_file():
+        return path.stat().st_size
+    if not path.is_dir():
+        return None
+    total = 0
+    for member in path.rglob("*"):
+        if member.is_symlink():
+            return None
+        if member.is_file():
+            total += member.stat().st_size
+    return total
+
+
+def _workspace_matches_receipt(workspace: Path, receipt: Dict[str, Any]) -> bool:
+    if receipt.get("version") != RECEIPT_VERSION:
+        return False
+    if not (workspace / "manifest.json").is_file():
+        return False
+    if not (workspace / "schema.json").is_file():
+        return False
+    if not (workspace / "variants.parquet").is_dir():
+        return False
+
+    manifest_hasher = hashlib.sha256()
+    with (workspace / "manifest.json").open("rb") as source:
+        manifest_hasher.update(source.read())
+    if manifest_hasher.hexdigest() != receipt.get("manifest_sha256"):
+        return False
+
+    stored_entries = receipt.get("stored_entries")
+    if not isinstance(stored_entries, dict):
+        return False
+    for relative_path, expected_size in stored_entries.items():
+        path = PurePosixPath(relative_path)
+        if path.is_absolute() or ".." in path.parts:
+            return False
+        if _workspace_entry_size(workspace / relative_path) != expected_size:
+            return False
+    return True
+
+
+def _cached_workspace_report(
+    archive: Path, workspace_root: Path, started: float
+) -> Optional[WorkspaceReport]:
+    if not workspace_root.is_dir():
+        return None
+    fingerprint = _archive_fingerprint(archive)
+    for workspace in workspace_root.iterdir():
+        if not workspace.is_dir() or ".partial-" in workspace.name:
+            continue
+        receipt_path = workspace / RECEIPT_FILENAME
+        if not receipt_path.is_file():
+            continue
+        try:
+            receipt = json.loads(receipt_path.read_text())
+            if receipt.get("archive") != fingerprint:
+                continue
+            if not _workspace_matches_receipt(workspace, receipt):
+                continue
+            report = receipt["report"]
+            return WorkspaceReport(
+                archive=str(archive),
+                workspace=str(workspace),
+                schema_version=report["schema_version"],
+                genome_build=report["genome_build"],
+                generated_at=report["generated_at"],
+                extracted_files=report["extracted_files"],
+                extracted_bytes=report["extracted_bytes"],
+                skipped_files=report["skipped_files"],
+                skipped_bytes=report["skipped_bytes"],
+                validated_entries=report["validated_entries"],
+                elapsed_seconds=round(time.monotonic() - started, 3),
+                reused_workspace=True,
+                validation_mode="cached",
+                validated_at=receipt["validated_at"],
+            )
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+    return None
+
+
 def _ancestor_manifest_directories(
     relative_path: str, manifest_paths: Iterable[str]
 ) -> List[str]:
@@ -130,11 +232,20 @@ def _hash_directory(path: Path) -> Tuple[str, int]:
     return hasher.hexdigest(), total_bytes
 
 
-def open_bundle(archive_path: str, workspace_root: Path) -> WorkspaceReport:
+def open_bundle(
+    archive_path: str, workspace_root: Path, force_validate: bool = False
+) -> WorkspaceReport:
     started = time.monotonic()
     archive = Path(archive_path).expanduser().resolve()
     if not archive.is_file():
         raise ValueError("archive does not exist: %s" % archive)
+
+    if not force_validate:
+        cached_report = _cached_workspace_report(archive, workspace_root, started)
+        if cached_report is not None:
+            return cached_report
+
+    archive_fingerprint = _archive_fingerprint(archive)
 
     root_name, manifest_bytes, manifest = _read_manifest(archive)
     schema_version = manifest.get("schema_version")
@@ -258,12 +369,41 @@ def open_bundle(archive_path: str, workspace_root: Path) -> WorkspaceReport:
         if failures:
             raise ValueError("bundle validation failed:\n  - " + "\n  - ".join(failures))
 
+        if _archive_fingerprint(archive) != archive_fingerprint:
+            raise ValueError("archive changed during validation")
+
         shutil.rmtree(validation_workspace)
-        reused_workspace = final_workspace.exists()
-        if reused_workspace:
-            shutil.rmtree(temporary_workspace)
-        else:
-            temporary_workspace.replace(final_workspace)
+        validated_at = datetime.now(timezone.utc).isoformat()
+        stored_entries = {
+            relative_path: metadata.get("bytes")
+            for relative_path, metadata in declared.items()
+            if _should_extract(relative_path) and metadata.get("bytes") is not None
+        }
+        receipt = {
+            "version": RECEIPT_VERSION,
+            "validated_at": validated_at,
+            "archive": archive_fingerprint,
+            "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+            "stored_entries": stored_entries,
+            "report": {
+                "schema_version": str(schema_version),
+                "genome_build": str(manifest.get("genome_build")),
+                "generated_at": str(manifest.get("generated_at")),
+                "extracted_files": extracted_files,
+                "extracted_bytes": extracted_bytes,
+                "skipped_files": skipped_files,
+                "skipped_bytes": skipped_bytes,
+                "validated_entries": len(declared),
+            },
+        }
+        receipt_path = temporary_workspace / RECEIPT_FILENAME
+        receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+
+        if final_workspace.is_symlink() or final_workspace.is_file():
+            final_workspace.unlink()
+        elif final_workspace.is_dir():
+            shutil.rmtree(final_workspace)
+        temporary_workspace.replace(final_workspace)
 
         return WorkspaceReport(
             archive=str(archive),
@@ -277,7 +417,9 @@ def open_bundle(archive_path: str, workspace_root: Path) -> WorkspaceReport:
             skipped_bytes=skipped_bytes,
             validated_entries=len(declared),
             elapsed_seconds=round(time.monotonic() - started, 3),
-            reused_workspace=reused_workspace,
+            reused_workspace=False,
+            validation_mode="full",
+            validated_at=validated_at,
         )
     except Exception:
         shutil.rmtree(temporary_workspace, ignore_errors=True)
@@ -318,8 +460,6 @@ def _variant_projection() -> str:
 
 
 def search_workspace(workspace_path: str, query: str) -> SearchResult:
-    import duckdb
-
     started = time.monotonic()
     workspace = Path(workspace_path).resolve()
     variants = workspace / "variants.parquet"

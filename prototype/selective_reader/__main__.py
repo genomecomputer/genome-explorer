@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from .core import WorkspaceReport, json_ready, open_bundle, search_workspace
+from .server import serve
 
 
 BOLD = "\033[1m"
@@ -50,6 +51,7 @@ def _render(state: PrototypeState) -> None:
         print(BOLD + "workspace: " + RESET + report.workspace)
         print(BOLD + "schema: " + RESET + report.schema_version)
         print(BOLD + "genome build: " + RESET + report.genome_build)
+        print(BOLD + "validation mode: " + RESET + report.validation_mode)
         print(BOLD + "validated: " + RESET + "%d manifest entries" % report.validated_entries)
         print(BOLD + "stored: " + RESET + "%d files, %s" % (
             report.extracted_files, _format_bytes(report.extracted_bytes)
@@ -79,7 +81,7 @@ def _workspace_root() -> Path:
     return Path.cwd() / ".genome-explorer" / "workspaces"
 
 
-def run_tui(archive: str) -> None:
+def run_tui(archive: str, force_validate: bool) -> None:
     state = PrototypeState(archive=archive)
     while True:
         _render(state)
@@ -91,7 +93,9 @@ def run_tui(archive: str) -> None:
             state.status = "opening"
             _render(state)
             try:
-                state.report = open_bundle(archive, _workspace_root())
+                state.report = open_bundle(
+                    archive, _workspace_root(), force_validate=force_validate
+                )
                 state.status = "validated and ready"
             except Exception as error:
                 state.status = "failed"
@@ -112,8 +116,10 @@ def run_tui(archive: str) -> None:
                 state.error = str(error)
 
 
-def run_batch(archive: str, queries: List[str]) -> None:
-    report = open_bundle(archive, _workspace_root())
+def run_batch(archive: str, queries: List[str], force_validate: bool) -> None:
+    report = open_bundle(
+        archive, _workspace_root(), force_validate=force_validate
+    )
     payload = {
         "report": report.to_dict(),
         "searches": [
@@ -121,6 +127,16 @@ def run_batch(archive: str, queries: List[str]) -> None:
         ],
     }
     print(json.dumps(json_ready(payload), indent=2, sort_keys=True))
+
+
+def run_server(
+    archive: str, port: int, open_browser: bool, force_validate: bool
+) -> None:
+    print("Opening the bundle...", flush=True)
+    report = open_bundle(
+        archive, _workspace_root(), force_validate=force_validate
+    )
+    serve(report, port=port, open_browser=open_browser)
 
 
 def main() -> None:
@@ -135,12 +151,42 @@ def main() -> None:
         metavar="QUERY",
         help="open the archive and run a deterministic query without the TUI",
     )
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="open the bundle and serve the local browser interface",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=0,
+        help="local port for --serve; defaults to a random available port",
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="do not automatically open the browser with --serve",
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="force full archive and manifest validation instead of using a receipt",
+    )
     args = parser.parse_args()
     archive = os.path.abspath(os.path.expanduser(args.archive))
+    if args.batch and args.serve:
+        parser.error("--batch and --serve cannot be combined")
     if args.batch:
-        run_batch(archive, args.batch)
+        run_batch(archive, args.batch, force_validate=args.verify)
+    elif args.serve:
+        run_server(
+            archive,
+            args.port,
+            open_browser=not args.no_browser,
+            force_validate=args.verify,
+        )
     else:
-        run_tui(archive)
+        run_tui(archive, force_validate=args.verify)
 
 
 if __name__ == "__main__":

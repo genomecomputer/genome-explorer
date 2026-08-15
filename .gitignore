@@ -1,1 +1,4 @@
 .genome-explorer/
+/build/
+/dist/
+/*.spec
