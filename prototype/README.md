@@ -23,9 +23,11 @@ Build a double-clickable macOS app with:
 open "./dist/Genome Explorer.app"
 ```
 
-Opening the app without arguments presents a native bundle picker, then opens
-the private local interface in the default browser. Its retained workspace is
-stored under `~/Library/Application Support/Genome Explorer/`.
+Opening the app without arguments first opens a welcome screen in the default
+browser. Its Choose genome bundle button opens the native file picker, then the
+same page shows local validation and the private explorer. The browser never
+copies the source archive. The retained workspace is stored under
+`~/Library/Application Support/Genome Explorer/`.
 
 The interface leads with everyday medication, trait, and condition searches.
 It restates only fields recorded in the bundle and keeps genomic identifiers,

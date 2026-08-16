@@ -21,6 +21,7 @@ PAGE = r'''<!doctype html>
       --shadow: 0 18px 60px rgba(25, 54, 43, .10);
     }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body {
       margin: 0;
       min-height: 100vh;
@@ -58,6 +59,40 @@ PAGE = r'''<!doctype html>
     .eyebrow { margin: 0 0 13px; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
     h1 { max-width: 790px; margin: 0; font-size: clamp(40px, 5.2vw, 62px); line-height: 1.02; letter-spacing: -.052em; }
     .lede { max-width: 690px; margin: 20px 0 0; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .welcome { padding-top: 78px; }
+    .welcome h1 { max-width: 720px; }
+    .open-card {
+      display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 20px;
+      margin-top: 36px; padding: 22px; background: rgba(255,255,255,.94); border: 1px solid var(--line);
+      border-radius: 18px; box-shadow: var(--shadow);
+    }
+    .open-icon {
+      width: 52px; height: 52px; display: grid; place-items: center; color: var(--accent);
+      background: var(--accent-soft); border-radius: 15px;
+    }
+    .open-icon svg { width: 25px; height: 25px; }
+    .open-copy h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+    .open-copy p { margin: 6px 0 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .choose-button {
+      min-height: 48px; padding: 0 19px; color: white; background: var(--accent); border: 0;
+      border-radius: 12px; font-weight: 750; cursor: pointer;
+    }
+    .choose-button:hover { background: var(--accent-dark); }
+    .choose-button:disabled { cursor: wait; opacity: .72; }
+    .selection-status {
+      display: flex; align-items: flex-start; gap: 10px; margin: 13px 0 0; padding: 13px 15px;
+      color: #43544c; background: var(--blue-soft); border: 1px solid #d6e5ef; border-radius: 12px;
+      font-size: 13px; line-height: 1.5;
+    }
+    .selection-status.error { color: #812f2f; background: #fff1f0; border-color: #f0d2cf; }
+    .status-spinner {
+      flex: 0 0 auto; width: 15px; height: 15px; margin-top: 2px;
+      border: 2px solid rgba(23,107,77,.2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite;
+    }
+    .trust-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+    .trust-item { padding: 17px; background: rgba(255,255,255,.62); border: 1px solid var(--line); border-radius: 13px; }
+    .trust-item strong { display: block; font-size: 14px; }
+    .trust-item span { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.45; }
     .search-panel {
       margin-top: 30px; padding: 10px; background: rgba(255,255,255,.94); border: 1px solid var(--line);
       border-radius: 18px; box-shadow: var(--shadow); backdrop-filter: blur(14px);
@@ -173,6 +208,9 @@ PAGE = r'''<!doctype html>
       .way { min-height: 0; }
       .section-variants .cards { grid-template-columns: 1fr; }
       .technical-fields { grid-template-columns: 1fr 1fr; }
+      .open-card { grid-template-columns: auto 1fr; }
+      .choose-button { grid-column: 1 / -1; }
+      .trust-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 480px) {
       h1 { font-size: 40px; }
@@ -183,6 +221,9 @@ PAGE = r'''<!doctype html>
       .simple-fields, .technical-fields, .bundle-facts { grid-template-columns: 1fr; }
       .results-head { align-items: flex-start; flex-direction: column; gap: 5px; }
       .bundle-summary { display: none; }
+      .welcome { padding-top: 52px; }
+      .open-card { grid-template-columns: 1fr; }
+      .open-icon { width: 46px; height: 46px; }
     }
   </style>
 </head>
@@ -201,7 +242,35 @@ PAGE = r'''<!doctype html>
       </div>
     </header>
 
-    <main>
+    <main class="welcome" id="welcome">
+      <p class="eyebrow">Welcome to Genome Explorer</p>
+      <h1>Explore your genome bundle privately.</h1>
+      <p class="lede">Choose a compatible bundle to get started. It stays on this computer and is never uploaded.</p>
+
+      <section class="open-card" aria-labelledby="open-title">
+        <div class="open-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7.5h5l1.6 2H20v8.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7.5Z"/><path d="M4 8V6a2 2 0 0 1 2-2h3l1.6 2H18a2 2 0 0 1 2 2v1.5"/></svg>
+        </div>
+        <div class="open-copy">
+          <h2 id="open-title">Open a genome bundle</h2>
+          <p>Select a compatible genome bundle from this computer. The original file will not be changed.</p>
+        </div>
+        <button class="choose-button" id="choose-button" type="button">Choose genome bundle</button>
+      </section>
+
+      <div class="selection-status" id="selection-status" hidden aria-live="polite">
+        <span class="status-spinner" id="status-spinner" aria-hidden="true"></span>
+        <span id="selection-message"></span>
+      </div>
+
+      <div class="trust-grid" aria-label="Privacy information">
+        <div class="trust-item"><strong>Stays local</strong><span>The bundle is read only on this computer.</span></div>
+        <div class="trust-item"><strong>No account or AI</strong><span>No sign-in, API key, or AI connection is required.</span></div>
+        <div class="trust-item"><strong>No upload</strong><span>The browser never copies the bundle, and the app does not send it over the network.</span></div>
+      </div>
+    </main>
+
+    <main id="explorer" hidden>
       <p class="eyebrow">Your genome bundle is ready</p>
       <h1>What would you like to explore?</h1>
       <p class="lede">Search a medication, trait, condition, or gene. Genome Explorer only shows information already recorded in this bundle.</p>
@@ -280,12 +349,20 @@ PAGE = r'''<!doctype html>
 
   <script nonce="__NONCE__">
     const basePath = "__BASE_PATH__";
+    const welcome = document.querySelector("#welcome");
+    const explorer = document.querySelector("#explorer");
+    const chooseButton = document.querySelector("#choose-button");
+    const selectionStatus = document.querySelector("#selection-status");
+    const selectionMessage = document.querySelector("#selection-message");
+    const statusSpinner = document.querySelector("#status-spinner");
     const form = document.querySelector("#search-form");
     const input = document.querySelector("#search-input");
     const button = document.querySelector("#search-button");
     const results = document.querySelector("#results");
     const content = document.querySelector("#result-content");
     const quitButton = document.querySelector("#quit-button");
+    let statusTimer = null;
+    let explorerReady = false;
 
     const fieldLabels = {
       variant_id: "Variant identifier", rsid: "rsID", chrom: "Chromosome", pos: "Position",
@@ -331,6 +408,78 @@ PAGE = r'''<!doctype html>
       let index = 0;
       while (value >= 1024 && index < units.length - 1) { value /= 1024; index += 1; }
       return `${value.toFixed(index ? 1 : 0)} ${units[index]}`;
+    }
+
+    function showSelectionStatus(message, { busy = false, error = false } = {}) {
+      selectionStatus.hidden = !message;
+      selectionStatus.classList.toggle("error", error);
+      statusSpinner.hidden = !busy;
+      selectionMessage.textContent = message;
+    }
+
+    function populateBundleStatus(status) {
+      const cached = status.validation_mode === "cached";
+      document.querySelector("#validation").textContent = cached ? "Previously verified" : "Verified";
+      document.querySelector("#build").textContent = status.genome_build;
+      document.querySelector("#snapshot").textContent = new Date(status.generated_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+      document.querySelector("#stored").textContent = formatBytes(status.stored_bytes);
+      document.querySelector("#bundle-summary").textContent = cached ? "Previously verified and ready" : "Verified and ready";
+    }
+
+    function renderAppStatus(status) {
+      if (status.status === "ready") {
+        welcome.hidden = true;
+        explorer.hidden = false;
+        chooseButton.disabled = false;
+        populateBundleStatus(status);
+        if (!explorerReady) {
+          explorerReady = true;
+          input.focus();
+        }
+        return;
+      }
+
+      welcome.hidden = false;
+      explorer.hidden = true;
+      explorerReady = false;
+      if (status.status === "choosing") {
+        chooseButton.disabled = true;
+        chooseButton.textContent = "Waiting for selection";
+        showSelectionStatus("Choose a genome bundle in the file window that just opened.", { busy: true });
+      } else if (status.status === "validating") {
+        chooseButton.disabled = true;
+        chooseButton.textContent = "Verifying bundle";
+        const name = status.archive_name || "your bundle";
+        showSelectionStatus(`Verifying ${name} locally. Large bundles may take a few minutes.`, { busy: true });
+      } else if (status.status === "failed") {
+        chooseButton.disabled = false;
+        chooseButton.textContent = "Choose another bundle";
+        showSelectionStatus(status.error || "This bundle could not be opened.", { error: true });
+      } else {
+        chooseButton.disabled = false;
+        chooseButton.textContent = "Choose genome bundle";
+        showSelectionStatus("");
+      }
+    }
+
+    function scheduleStatusPoll(delay = 350) {
+      window.clearTimeout(statusTimer);
+      statusTimer = window.setTimeout(refreshStatus, delay);
+    }
+
+    async function refreshStatus() {
+      try {
+        const response = await fetch(`${basePath}/api/status`);
+        const status = await response.json();
+        renderAppStatus(status);
+        if (status.status === "choosing" || status.status === "validating") scheduleStatusPoll();
+      } catch (error) {
+        welcome.hidden = false;
+        explorer.hidden = true;
+        chooseButton.disabled = false;
+        chooseButton.textContent = "Try again";
+        showSelectionStatus("Genome Explorer could not check the local bundle status.", { error: true });
+      }
     }
 
     function formatValue(value) {
@@ -558,7 +707,24 @@ PAGE = r'''<!doctype html>
       });
     });
 
+    chooseButton.addEventListener("click", async () => {
+      chooseButton.disabled = true;
+      chooseButton.textContent = "Opening file selector";
+      showSelectionStatus("Opening the local file selector.", { busy: true });
+      try {
+        const response = await fetch(`${basePath}/api/select`, { method: "POST" });
+        const status = await response.json();
+        renderAppStatus(status);
+        if (status.status === "choosing" || status.status === "validating") scheduleStatusPoll(150);
+      } catch (error) {
+        chooseButton.disabled = false;
+        chooseButton.textContent = "Try again";
+        showSelectionStatus("The local file selector could not be opened.", { error: true });
+      }
+    });
+
     quitButton.addEventListener("click", async () => {
+      window.clearTimeout(statusTimer);
       quitButton.disabled = true;
       quitButton.textContent = "Stopping";
       try {
@@ -568,16 +734,7 @@ PAGE = r'''<!doctype html>
       }
     });
 
-    fetch(`${basePath}/api/status`)
-      .then(response => response.json())
-      .then(status => {
-        const cached = status.validation_mode === "cached";
-        document.querySelector("#validation").textContent = cached ? "Previously verified" : "Verified";
-        document.querySelector("#build").textContent = status.genome_build;
-        document.querySelector("#snapshot").textContent = new Date(status.generated_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-        document.querySelector("#stored").textContent = formatBytes(status.stored_bytes);
-        document.querySelector("#bundle-summary").textContent = cached ? "Previously verified and ready" : "Verified and ready";
-      });
+    refreshStatus();
   </script>
 </body>
 </html>'''

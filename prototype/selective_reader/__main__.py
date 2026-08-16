@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from .core import WorkspaceReport, json_ready, open_bundle, search_workspace
-from .server import serve
+from .server import serve, serve_launcher
 
 
 BOLD = "\033[1m"
@@ -230,28 +230,34 @@ def main() -> None:
     if args.batch and args.archive is None:
         parser.error("--batch requires an archive path")
     app_mode = args.archive is None
-    selected_archive = _choose_archive() if app_mode else args.archive
-    if selected_archive is None:
-        return
-    archive = os.path.abspath(os.path.expanduser(selected_archive))
     if args.batch and args.serve:
         parser.error("--batch and --serve cannot be combined")
-    if args.batch:
-        run_batch(archive, args.batch, force_validate=args.verify)
-    elif args.serve or app_mode:
+    if app_mode:
         try:
-            run_server(
-                archive,
-                args.port,
-                open_browser=not args.no_browser,
+            serve_launcher(
+                chooser=_choose_archive,
+                workspace_root=_workspace_root(app_mode=True),
                 force_validate=args.verify,
-                workspace_root=_workspace_root(app_mode=app_mode),
+                port=args.port,
+                open_browser=not args.no_browser,
             )
         except Exception as error:
-            if app_mode and sys.platform == "darwin":
+            if sys.platform == "darwin":
                 _show_macos_error(str(error))
                 return
             raise
+        return
+
+    archive = os.path.abspath(os.path.expanduser(args.archive))
+    if args.batch:
+        run_batch(archive, args.batch, force_validate=args.verify)
+    elif args.serve:
+        run_server(
+            archive,
+            args.port,
+            open_browser=not args.no_browser,
+            force_validate=args.verify,
+        )
     else:
         run_tui(archive, force_validate=args.verify)
 
