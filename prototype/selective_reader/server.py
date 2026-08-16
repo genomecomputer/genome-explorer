@@ -111,6 +111,10 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
             self._reject(403)
             return
         path = urlsplit(self.path).path.rstrip("/")
+        if path == self.server.base_path + "/api/shutdown":
+            self._send_json(200, {"status": "stopped"})
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            return
         if path != self.server.base_path + "/api/search":
             self._reject()
             return

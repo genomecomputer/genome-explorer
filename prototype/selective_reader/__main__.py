@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -77,8 +79,50 @@ def _render(state: PrototypeState) -> None:
     print(BOLD + "[q]" + RESET + DIM + " quit" + RESET)
 
 
-def _workspace_root() -> Path:
+def _workspace_root(app_mode: bool = False) -> Path:
+    if app_mode and sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Genome Explorer" / "workspaces"
     return Path.cwd() / ".genome-explorer" / "workspaces"
+
+
+def _show_macos_error(message: str) -> None:
+    script = """
+on run argv
+  display alert "Genome Explorer" message (item 1 of argv) as critical buttons {"OK"} default button "OK"
+end run
+"""
+    subprocess.run(
+        ["/usr/bin/osascript", "-e", script, message],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _choose_macos_archive() -> Optional[str]:
+    script = """
+set selectedFile to choose file with prompt "Choose a .genome.tar.gz bundle"
+return POSIX path of selectedFile
+"""
+    while True:
+        result = subprocess.run(
+            ["/usr/bin/osascript", "-e", script],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            return None
+        archive = result.stdout.strip()
+        if archive.endswith(".genome.tar.gz") and Path(archive).is_file():
+            return archive
+        _show_macos_error("Choose a file ending in .genome.tar.gz.")
+
+
+def _choose_archive() -> Optional[str]:
+    if sys.platform == "darwin":
+        return _choose_macos_archive()
+    raise RuntimeError("Open a bundle by passing its path to Genome Explorer.")
 
 
 def run_tui(archive: str, force_validate: bool) -> None:
@@ -130,11 +174,17 @@ def run_batch(archive: str, queries: List[str], force_validate: bool) -> None:
 
 
 def run_server(
-    archive: str, port: int, open_browser: bool, force_validate: bool
+    archive: str,
+    port: int,
+    open_browser: bool,
+    force_validate: bool,
+    workspace_root: Optional[Path] = None,
 ) -> None:
     print("Opening the bundle...", flush=True)
     report = open_bundle(
-        archive, _workspace_root(), force_validate=force_validate
+        archive,
+        workspace_root or _workspace_root(),
+        force_validate=force_validate,
     )
     serve(report, port=port, open_browser=open_browser)
 
@@ -143,7 +193,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Throwaway selective `.genome` reader prototype"
     )
-    parser.add_argument("archive", help="path to a .genome.tar.gz archive")
+    parser.add_argument(
+        "archive",
+        nargs="?",
+        help="path to a .genome.tar.gz archive; omit it to choose a file",
+    )
     parser.add_argument(
         "--batch",
         action="append",
@@ -173,18 +227,31 @@ def main() -> None:
         help="force full archive and manifest validation instead of using a receipt",
     )
     args = parser.parse_args()
-    archive = os.path.abspath(os.path.expanduser(args.archive))
+    if args.batch and args.archive is None:
+        parser.error("--batch requires an archive path")
+    app_mode = args.archive is None
+    selected_archive = _choose_archive() if app_mode else args.archive
+    if selected_archive is None:
+        return
+    archive = os.path.abspath(os.path.expanduser(selected_archive))
     if args.batch and args.serve:
         parser.error("--batch and --serve cannot be combined")
     if args.batch:
         run_batch(archive, args.batch, force_validate=args.verify)
-    elif args.serve:
-        run_server(
-            archive,
-            args.port,
-            open_browser=not args.no_browser,
-            force_validate=args.verify,
-        )
+    elif args.serve or app_mode:
+        try:
+            run_server(
+                archive,
+                args.port,
+                open_browser=not args.no_browser,
+                force_validate=args.verify,
+                workspace_root=_workspace_root(app_mode=app_mode),
+            )
+        except Exception as error:
+            if app_mode and sys.platform == "darwin":
+                _show_macos_error(str(error))
+                return
+            raise
     else:
         run_tui(archive, force_validate=args.verify)
 

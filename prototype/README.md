@@ -16,10 +16,21 @@ Open the local browser interface with:
 ./prototype/run /path/to/sample.genome.tar.gz --serve
 ```
 
-Build a standalone executable with:
+Build a double-clickable macOS app with:
 
 ```sh
-./prototype/build
+./prototype/build app
+open "./dist/Genome Explorer.app"
+```
+
+Opening the app without arguments presents a native bundle picker, then opens
+the private local interface in the default browser. Its retained workspace is
+stored under `~/Library/Application Support/Genome Explorer/`.
+
+Build a standalone command-line executable with:
+
+```sh
+./prototype/build cli
 ./dist/genome-explorer /path/to/sample.genome.tar.gz --serve
 ```
 

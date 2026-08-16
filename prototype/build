@@ -15,11 +15,31 @@ if ! "$runtime_dir/bin/python" -c 'import duckdb, PyInstaller' >/dev/null 2>&1; 
 fi
 
 cd "$repo_dir"
-exec "$runtime_dir/bin/python" -m PyInstaller \
-  --noconfirm \
-  --clean \
-  --onefile \
-  --name genome-explorer \
-  --paths "$repo_dir" \
-  --hidden-import uuid \
-  prototype/entrypoint.py
+
+case "${1:-cli}" in
+  app)
+    exec "$runtime_dir/bin/python" -m PyInstaller \
+      --noconfirm \
+      --clean \
+      --windowed \
+      --name "Genome Explorer" \
+      --osx-bundle-identifier org.genomecomputer.genome-explorer.prototype \
+      --paths "$repo_dir" \
+      --hidden-import uuid \
+      prototype/entrypoint.py
+    ;;
+  cli)
+    exec "$runtime_dir/bin/python" -m PyInstaller \
+      --noconfirm \
+      --clean \
+      --onefile \
+      --name genome-explorer \
+      --paths "$repo_dir" \
+      --hidden-import uuid \
+      prototype/entrypoint.py
+    ;;
+  *)
+    echo "usage: ./prototype/build [app|cli]" >&2
+    exit 2
+    ;;
+esac

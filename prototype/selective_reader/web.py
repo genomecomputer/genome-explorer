@@ -46,6 +46,13 @@ PAGE = r'''<!doctype html>
       border-radius: 999px; font-size: 13px; font-weight: 680;
     }
     .privacy-dot { width: 7px; height: 7px; border-radius: 50%; background: #269663; box-shadow: 0 0 0 4px rgba(38,150,99,.10); }
+    .header-actions { display: flex; align-items: center; gap: 9px; }
+    .quit-button {
+      padding: 8px 11px; color: var(--muted); background: rgba(255,255,255,.7);
+      border: 1px solid var(--line); border-radius: 999px; font-size: 13px; font-weight: 680; cursor: pointer;
+    }
+    .quit-button:hover { color: var(--ink); background: var(--surface); }
+    .quit-button:disabled { cursor: wait; opacity: .7; }
     main { padding-top: 62px; }
     .eyebrow { margin: 0 0 14px; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
     h1 { max-width: 940px; margin: 0; font-size: clamp(38px, 5.3vw, 66px); line-height: .98; letter-spacing: -.055em; }
@@ -142,7 +149,10 @@ PAGE = r'''<!doctype html>
         </span>
         <span>Genome Explorer</span>
       </div>
-      <div class="privacy"><span class="privacy-dot"></span>Private and local</div>
+      <div class="header-actions">
+        <div class="privacy"><span class="privacy-dot"></span>Private and local</div>
+        <button class="quit-button" id="quit-button" type="button">Quit</button>
+      </div>
     </header>
 
     <main>
@@ -193,6 +203,7 @@ PAGE = r'''<!doctype html>
     const button = document.querySelector("#search-button");
     const results = document.querySelector("#results");
     const content = document.querySelector("#result-content");
+    const quitButton = document.querySelector("#quit-button");
 
     const fieldLabels = {
       variant_id: "Variant", rsid: "rsID", chrom: "Chromosome", pos: "Position",
@@ -353,6 +364,16 @@ PAGE = r'''<!doctype html>
         input.value = example.textContent;
         search(input.value);
       });
+    });
+
+    quitButton.addEventListener("click", async () => {
+      quitButton.disabled = true;
+      quitButton.textContent = "Stopping";
+      try {
+        await fetch(`${basePath}/api/shutdown`, { method: "POST" });
+      } finally {
+        document.body.innerHTML = '<main class="shell"><p class="eyebrow">Genome Explorer stopped</p><h1>Your local session has ended.</h1><p class="lede">You can close this tab. Your source bundle was not modified.</p></main>';
+      }
     });
 
     fetch(`${basePath}/api/status`)
