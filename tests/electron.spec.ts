@@ -71,15 +71,16 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(pcosTopic.locator(".topic-indicator-value")).toHaveText("85th percentile");
     await firstWindow.getByRole("tab", { name: /Traits/ }).click();
     const cholesterolTopic = firstWindow.getByRole("button", { name: "Search this bundle for Cholesterol levels" });
-    await expect(cholesterolTopic.locator(".topic-indicator-value")).toContainText("research-linked variants");
+    await expect(cholesterolTopic.locator(".topic-indicator-value")).toHaveText("Research context only");
+    await expect(cholesterolTopic.locator(".topic-indicator-detail")).toHaveText("No person-specific score recorded");
     const lactoseTopic = firstWindow.getByRole("button", { name: "Search this bundle for Lactose intolerance" });
     await expect(lactoseTopic.locator(".topic-indicator")).toHaveClass(/no-data/);
     await cholesterolTopic.click();
-    await expect(firstWindow.getByText("Personal variants with research annotations")).toBeVisible();
-    await expect(firstWindow.getByText(/personal variant records whose recorded research annotations mention Cholesterol levels/)).toBeVisible();
+    await expect(firstWindow.getByText("Research associations")).toBeVisible();
+    await expect(firstWindow.locator(".section-trait_variant_summary")).toHaveCount(0);
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       await firstWindow.screenshot({
-        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "research-linked-topic.png"),
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "research-context-topic.png"),
         fullPage: true,
       });
     }

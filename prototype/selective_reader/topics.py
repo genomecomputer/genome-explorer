@@ -10,7 +10,7 @@ import duckdb
 
 
 TOPIC_INDEX_FILENAME = ".topic-index.json"
-TOPIC_INDEX_VERSION = 2
+TOPIC_INDEX_VERSION = 3
 
 TOPICS: Tuple[Dict[str, str], ...] = (
     # Medications are matched only against recorded pharmacogenomic drug links.
@@ -80,7 +80,6 @@ def _topic_details() -> Dict[str, Dict[str, Any]]:
         topic["id"]: {
             "pharmacogenomics": [],
             "polygenic_scores": [],
-            "trait_variant_count": 0,
             "research_association_count": 0,
         }
         for topic in TOPICS
@@ -169,46 +168,6 @@ def _scan_traits(
                 }
             )
 
-    variants_path = workspace / "variants.parquet"
-    if variants_path.is_dir():
-        connection.execute(
-            "CREATE VIEW topic_variants AS SELECT * FROM read_parquet("
-            "'%s/**/*.parquet', hive_partitioning=true)" % _sql_path(variants_path)
-        )
-        try:
-            connection.execute(
-                "SELECT trait_associations.is_gwas_hit, "
-                "trait_associations.traits FROM topic_variants LIMIT 0"
-            )
-        except duckdb.Error:
-            pass
-        else:
-            cursor = connection.execute(
-                """
-                WITH topics(topic_id, term) AS (VALUES %s),
-                personal_traits AS (
-                    SELECT variant_id, trait_associations.traits AS traits
-                    FROM topic_variants
-                    WHERE trait_associations.is_gwas_hit
-                ),
-                matched AS (
-                    SELECT DISTINCT topics.topic_id, personal_traits.variant_id
-                    FROM personal_traits
-                    CROSS JOIN UNNEST(personal_traits.traits) AS association(value)
-                    JOIN topics
-                      ON lower(association.value) LIKE '%%' || lower(topics.term) || '%%'
-                )
-                SELECT topic_id, count(*) AS variant_count
-                FROM matched
-                GROUP BY topic_id
-                """ % values,
-                parameters,
-            )
-            for topic_id, variant_count in cursor.fetchall():
-                key = str(topic_id)
-                matches[key].add("trait_variants")
-                details[key]["trait_variant_count"] = int(variant_count)
-
     gwas_path = workspace / "gwas_associations.parquet"
     if gwas_path.is_file():
         connection.execute(
@@ -291,8 +250,7 @@ def topics_for_workspace(workspace_path: str) -> List[Dict[str, Any]]:
     section_order = {
         "pharmacogenomics": 0,
         "polygenic_scores": 1,
-        "trait_variants": 2,
-        "gwas": 3,
+        "gwas": 2,
     }
     result = [
         {
@@ -304,7 +262,6 @@ def topics_for_workspace(workspace_path: str) -> List[Dict[str, Any]]:
             "personal": {
                 "pharmacogenomics": details[topic["id"]]["pharmacogenomics"],
                 "polygenic_scores": details[topic["id"]]["polygenic_scores"],
-                "trait_variant_count": details[topic["id"]]["trait_variant_count"],
             },
             "research_association_count": details[topic["id"]][
                 "research_association_count"
@@ -314,24 +271,3 @@ def topics_for_workspace(workspace_path: str) -> List[Dict[str, Any]]:
     ]
     _store_topic_index(workspace, result)
     return result
-
-
-def topic_summary_for_query(
-    workspace_path: str, query: str
-) -> Optional[Dict[str, Any]]:
-    normalized = query.strip().lower()
-    if not normalized:
-        return None
-    for topic in topics_for_workspace(workspace_path):
-        if normalized not in {str(topic["query"]).lower(), str(topic["label"]).lower()}:
-            continue
-        personal = topic.get("personal", {})
-        variant_count = int(personal.get("trait_variant_count", 0))
-        if variant_count < 1:
-            return None
-        return {
-            "section": "trait_variant_summary",
-            "trait": topic["label"],
-            "variant_count": variant_count,
-        }
-    return None

@@ -429,7 +429,7 @@ PAGE = r'''<!doctype html>
         </div>
         <div class="catalog-note">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-          <span>Row values come from person-specific fields in this bundle. Research-linked variant counts are not risk scores, and Research context only means the bundle has general evidence but no matched personal topic value.</span>
+          <span>Highlighted values are person-specific PGx results or polygenic scores already recorded in this bundle. Research context only means the bundle includes general evidence but no person-specific score for this topic.</span>
         </div>
         <div class="topic-catalog" id="topic-catalog"></div>
 
@@ -524,14 +524,12 @@ PAGE = r'''<!doctype html>
     const sectionLabels = {
       variants: "Your recorded variants", genes: "Records for this gene",
       pharmacogenomics: "Medication-related records", polygenic_scores: "Traits and scores",
-      trait_variant_summary: "Personal variants with research annotations",
       gwas: "Research associations"
     };
 
     const recordLabels = {
       variants: "Personal variant record", genes: "Personal gene summary",
       pharmacogenomics: "Bundle pharmacogenomic record", polygenic_scores: "Recorded score",
-      trait_variant_summary: "Personal research-annotation summary",
       gwas: "Research association"
     };
 
@@ -540,7 +538,6 @@ PAGE = r'''<!doctype html>
       genes: ["variant_count", "actionable_count"],
       pharmacogenomics: [],
       polygenic_scores: ["percentile", "reference_population"],
-      trait_variant_summary: ["variant_count"],
       gwas: ["gene", "source"]
     };
 
@@ -576,12 +573,12 @@ PAGE = r'''<!doctype html>
       conditions: {
         label: "Conditions",
         title: "Conditions",
-        description: "Common conditions with recorded scores or personal variant annotations when available."
+        description: "Common conditions with recorded polygenic scores when available."
       },
       traits: {
         label: "Traits",
         title: "Traits",
-        description: "Everyday traits with recorded percentiles or personal variant annotations when available."
+        description: "Everyday traits with recorded polygenic scores when available."
       }
     };
 
@@ -594,7 +591,6 @@ PAGE = r'''<!doctype html>
       const personal = topic.personal || {};
       const pgx = Array.isArray(personal.pharmacogenomics) ? personal.pharmacogenomics : [];
       const scores = Array.isArray(personal.polygenic_scores) ? personal.polygenic_scores : [];
-      const variantCount = Number(personal.trait_variant_count || 0);
       const researchCount = Number(topic.research_association_count || 0);
       const indicator = document.createElement("span");
       indicator.className = "topic-indicator";
@@ -612,24 +608,17 @@ PAGE = r'''<!doctype html>
       } else if (scores.length === 1) {
         const percentile = Number(scores[0].percentile).toLocaleString(undefined, { maximumFractionDigits: 1 });
         value.textContent = `${percentile}th percentile`;
-        detail.textContent = variantCount
-          ? `Recorded score · ${variantCount.toLocaleString()} research-linked variants`
-          : "Recorded polygenic score";
+        detail.textContent = "Recorded polygenic score";
       } else if (scores.length > 1) {
         value.textContent = `${scores.length} recorded scores`;
-        detail.textContent = variantCount
-          ? `${variantCount.toLocaleString()} research-linked variants`
-          : "Person-specific values in this bundle";
-      } else if (variantCount > 0) {
-        value.textContent = `${variantCount.toLocaleString()} research-linked variants`;
-        detail.textContent = "Personal variant records · no risk inference";
+        detail.textContent = "Person-specific values in this bundle";
       } else if (researchCount > 0) {
         indicator.classList.add("research");
         value.textContent = "Research context only";
-        detail.textContent = `${researchCount.toLocaleString()} general associations in the bundle`;
+        detail.textContent = "No person-specific score recorded";
       } else {
         indicator.classList.add("no-data");
-        value.textContent = "No matching topic data";
+        value.textContent = "No personal topic data";
         detail.textContent = "This is not a negative result";
       }
       indicator.append(value, detail);
@@ -1044,7 +1033,6 @@ PAGE = r'''<!doctype html>
       }
       if (hit.section === "variants") return hit.rsid ? `Identifier: ${hit.rsid}` : "";
       if (hit.section === "genes") return "Personal variant records found";
-      if (hit.section === "trait_variant_summary") return "Person-specific records in this bundle";
       if (hit.section === "gwas") {
         return "External population evidence recorded in the bundle";
       }
@@ -1056,9 +1044,6 @@ PAGE = r'''<!doctype html>
         return `This bundle contains a person-specific pharmacogenomic result for ${hit.gene_symbol}.`;
       }
       if (hit.section === "polygenic_scores") return `The bundle contains a recorded score for ${hit.trait}.`;
-      if (hit.section === "trait_variant_summary") {
-        return `This bundle contains ${Number(hit.variant_count).toLocaleString()} personal variant records whose recorded research annotations mention ${hit.trait}.`;
-      }
       if (hit.section === "gwas") {
         const identifier = hit.rsid || hit.variant_id || "this variant";
         return `The bundle includes an external research association between ${identifier} and ${hit.trait}.`;
@@ -1075,9 +1060,6 @@ PAGE = r'''<!doctype html>
       if (hit.section === "genes") {
         return "This shows that the bundle has personal variant records for this gene. It is not a test of whether the gene itself is present or absent.";
       }
-      if (hit.section === "trait_variant_summary") {
-        return "These records belong to the person represented by this bundle, but the count is not a risk score. It does not indicate effect direction, likelihood, or whether the person has the trait.";
-      }
       if (hit.section === "gwas" && hit.gene) {
         return `${hit.gene} is named by the external research source. This association has not been presented as a match to this person's genome.`;
       }
@@ -1086,7 +1068,6 @@ PAGE = r'''<!doctype html>
 
     function fieldLabelFor(section, key) {
       if (section === "gwas" && key === "gene") return "Gene named by research";
-      if (section === "trait_variant_summary" && key === "variant_count") return "Annotated personal variants";
       if (section === "variants" && key === "gene") return "Gene annotation";
       return fieldLabels[key] || key.replaceAll("_", " ");
     }
@@ -1104,8 +1085,6 @@ PAGE = r'''<!doctype html>
         link.rel = "noopener noreferrer";
         link.textContent = "Open recorded source";
         detail.append(link);
-      } else if (section === "trait_variant_summary" && key === "variant_count") {
-        detail.textContent = Number(value).toLocaleString();
       } else {
         detail.textContent = formatValue(value);
       }
@@ -1265,11 +1244,10 @@ PAGE = r'''<!doctype html>
         return;
       }
       const grouped = Object.groupBy(payload.hits, hit => hit.section);
-      const sectionOrder = ["pharmacogenomics", "polygenic_scores", "trait_variant_summary", "genes", "variants", "gwas"];
+      const sectionOrder = ["pharmacogenomics", "polygenic_scores", "genes", "variants", "gwas"];
       const hasClearerRecord = Boolean(
         grouped.pharmacogenomics?.length ||
-        grouped.polygenic_scores?.length ||
-        grouped.trait_variant_summary?.length
+        grouped.polygenic_scores?.length
       );
       sectionOrder.filter(sectionName => grouped[sectionName]?.length).forEach(sectionName => {
         const hits = grouped[sectionName];
