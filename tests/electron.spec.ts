@@ -66,6 +66,23 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
         fullPage: true,
       });
     }
+    await firstWindow.getByRole("tab", { name: /Conditions/ }).click();
+    const pcosTopic = firstWindow.getByRole("button", { name: "Search this bundle for PCOS" });
+    await expect(pcosTopic.locator(".topic-indicator-value")).toHaveText("85th percentile");
+    await firstWindow.getByRole("tab", { name: /Traits/ }).click();
+    const cholesterolTopic = firstWindow.getByRole("button", { name: "Search this bundle for Cholesterol levels" });
+    await expect(cholesterolTopic.locator(".topic-indicator-value")).toContainText("research-linked variants");
+    const lactoseTopic = firstWindow.getByRole("button", { name: "Search this bundle for Lactose intolerance" });
+    await expect(lactoseTopic.locator(".topic-indicator")).toHaveClass(/no-data/);
+    await cholesterolTopic.click();
+    await expect(firstWindow.getByText("Personal variants with research annotations")).toBeVisible();
+    await expect(firstWindow.getByText(/personal variant records whose recorded research annotations mention Cholesterol levels/)).toBeVisible();
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await firstWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "research-linked-topic.png"),
+        fullPage: true,
+      });
+    }
     await firstWindow.getByRole("tab", { name: /Medications/ }).click();
     await expect(firstWindow.locator(".directory-row")).toHaveCount(15);
 

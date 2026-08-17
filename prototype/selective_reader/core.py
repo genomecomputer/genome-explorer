@@ -14,6 +14,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import duckdb
 
+from .topics import topic_summary_for_query
+
 
 SUPPORTED_SCHEMA_VERSIONS = {"1.0.0"}
 CHUNK_SIZE = 1024 * 1024
@@ -569,6 +571,10 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
                 [normalized_query],
             )
             hits.extend(_rows(cursor, "polygenic_scores"))
+
+        topic_summary = topic_summary_for_query(str(workspace), normalized_query)
+        if topic_summary is not None:
+            hits.append(topic_summary)
 
         if "gwas_associations" in available:
             cursor = connection.execute(
