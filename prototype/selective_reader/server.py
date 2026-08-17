@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 from .bundle_library import BundleLibrary
 from .core import WorkspaceReport, json_ready, open_bundle, search_workspace
+from .topics import topics_for_workspace
 from .web import PAGE
 
 
@@ -46,10 +47,12 @@ class LocalExplorerServer(ThreadingHTTPServer):
         self.archive_name = Path(report.archive).name if report is not None else ""
         self.active_bundle_id = ""
         self.active_nickname = ""
+        self.topics = []
         if report is not None and self.library is not None:
             entry = self.library.register(report)
             self.active_bundle_id = entry.bundle_id
             self.active_nickname = entry.nickname
+            self.topics = topics_for_workspace(report.workspace)
         self.token = secrets.token_urlsafe(24)
         self.nonce = secrets.token_urlsafe(18)
         self.expected_host = "127.0.0.1:%d" % self.server_port
@@ -68,11 +71,13 @@ class LocalExplorerServer(ThreadingHTTPServer):
             report = self.report
             active_bundle_id = self.active_bundle_id
             active_nickname = self.active_nickname
+            topics = self.topics
 
         payload: Dict[str, Any] = {
             "status": status,
             "archive_name": archive_name,
             "bundles": self.library.public_entries() if self.library else [],
+            "topics": topics,
         }
         if error:
             payload["error"] = error
@@ -110,6 +115,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
             self.report = None
             self.active_bundle_id = ""
             self.active_nickname = ""
+            self.topics = []
         threading.Thread(target=self._select_and_open, daemon=True).start()
         return True
 
@@ -123,6 +129,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
             self.archive_name = ""
             self.active_bundle_id = ""
             self.active_nickname = ""
+            self.topics = []
         return True
 
     def begin_open(self, bundle_id: str) -> bool:
@@ -140,6 +147,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
             self.archive_name = entry.file_name
             self.active_bundle_id = ""
             self.active_nickname = ""
+            self.topics = []
         threading.Thread(
             target=self._open_saved_bundle,
             args=(bundle_id,),
@@ -158,6 +166,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
     def _accept_report(self, report: WorkspaceReport) -> None:
         bundle_id = ""
         nickname = ""
+        topics = topics_for_workspace(report.workspace)
         if self.library is not None:
             entry = self.library.register(report)
             bundle_id = entry.bundle_id
@@ -168,6 +177,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
             self.state_error = ""
             self.active_bundle_id = bundle_id
             self.active_nickname = nickname
+            self.topics = topics
 
     def _select_and_open(self) -> None:
         try:
@@ -194,6 +204,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
                 self.state_error = str(error)
                 self.active_bundle_id = ""
                 self.active_nickname = ""
+                self.topics = []
 
     def _open_saved_bundle(self, bundle_id: str) -> None:
         try:
@@ -217,6 +228,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
                 self.state_error = str(error)
                 self.active_bundle_id = ""
                 self.active_nickname = ""
+                self.topics = []
 
 
 class LocalExplorerHandler(BaseHTTPRequestHandler):
