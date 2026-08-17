@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 from urllib.parse import urlsplit
 
+from .bundle_library import BundleLibrary
 from .core import WorkspaceReport, json_ready, open_bundle, search_workspace
 from .web import PAGE
 
@@ -34,10 +35,21 @@ class LocalExplorerServer(ThreadingHTTPServer):
         self.chooser = chooser
         self.workspace_root = workspace_root
         self.force_validate = force_validate
+        self.library = (
+            BundleLibrary(workspace_root.parent / "bundle-library.json")
+            if workspace_root is not None
+            else None
+        )
         self.state_lock = threading.Lock()
         self.state_status = "ready" if report is not None else "waiting"
         self.state_error = ""
         self.archive_name = Path(report.archive).name if report is not None else ""
+        self.active_bundle_id = ""
+        self.active_nickname = ""
+        if report is not None and self.library is not None:
+            entry = self.library.register(report)
+            self.active_bundle_id = entry.bundle_id
+            self.active_nickname = entry.nickname
         self.token = secrets.token_urlsafe(24)
         self.nonce = secrets.token_urlsafe(18)
         self.expected_host = "127.0.0.1:%d" % self.server_port
@@ -54,10 +66,13 @@ class LocalExplorerServer(ThreadingHTTPServer):
             error = self.state_error
             archive_name = self.archive_name
             report = self.report
+            active_bundle_id = self.active_bundle_id
+            active_nickname = self.active_nickname
 
         payload: Dict[str, Any] = {
             "status": status,
             "archive_name": archive_name,
+            "bundles": self.library.public_entries() if self.library else [],
         }
         if error:
             payload["error"] = error
@@ -73,6 +88,8 @@ class LocalExplorerServer(ThreadingHTTPServer):
                     "validation_seconds": report.elapsed_seconds,
                     "validation_mode": report.validation_mode,
                     "validated_at": report.validated_at,
+                    "active_bundle_id": active_bundle_id,
+                    "active_nickname": active_nickname,
                 }
             )
         return payload
@@ -91,8 +108,66 @@ class LocalExplorerServer(ThreadingHTTPServer):
             self.state_error = ""
             self.archive_name = ""
             self.report = None
+            self.active_bundle_id = ""
+            self.active_nickname = ""
         threading.Thread(target=self._select_and_open, daemon=True).start()
         return True
+
+    def show_library(self) -> bool:
+        with self.state_lock:
+            if self.state_status in {"choosing", "validating"}:
+                return False
+            self.report = None
+            self.state_status = "waiting"
+            self.state_error = ""
+            self.archive_name = ""
+            self.active_bundle_id = ""
+            self.active_nickname = ""
+        return True
+
+    def begin_open(self, bundle_id: str) -> bool:
+        if self.library is None:
+            return False
+        entry = self.library.find(bundle_id)
+        if entry is None:
+            return False
+        with self.state_lock:
+            if self.state_status in {"choosing", "validating"}:
+                return False
+            self.report = None
+            self.state_status = "validating"
+            self.state_error = ""
+            self.archive_name = entry.file_name
+            self.active_bundle_id = ""
+            self.active_nickname = ""
+        threading.Thread(
+            target=self._open_saved_bundle,
+            args=(bundle_id,),
+            daemon=True,
+        ).start()
+        return True
+
+    def rename_bundle(self, bundle_id: str, nickname: str) -> None:
+        if self.library is None:
+            raise ValueError("local bundle library is unavailable")
+        entry = self.library.rename(bundle_id, nickname)
+        with self.state_lock:
+            if self.active_bundle_id == bundle_id:
+                self.active_nickname = entry.nickname
+
+    def _accept_report(self, report: WorkspaceReport) -> None:
+        bundle_id = ""
+        nickname = ""
+        if self.library is not None:
+            entry = self.library.register(report)
+            bundle_id = entry.bundle_id
+            nickname = entry.nickname
+        with self.state_lock:
+            self.report = report
+            self.state_status = "ready"
+            self.state_error = ""
+            self.active_bundle_id = bundle_id
+            self.active_nickname = nickname
 
     def _select_and_open(self) -> None:
         try:
@@ -111,15 +186,37 @@ class LocalExplorerServer(ThreadingHTTPServer):
                 self.workspace_root,
                 force_validate=self.force_validate,
             )
-            with self.state_lock:
-                self.report = report
-                self.state_status = "ready"
-                self.state_error = ""
+            self._accept_report(report)
         except Exception as error:
             with self.state_lock:
                 self.report = None
                 self.state_status = "failed"
                 self.state_error = str(error)
+                self.active_bundle_id = ""
+                self.active_nickname = ""
+
+    def _open_saved_bundle(self, bundle_id: str) -> None:
+        try:
+            if self.library is None or self.workspace_root is None:
+                raise RuntimeError("local bundle library is unavailable")
+            entry = self.library.find(bundle_id)
+            if entry is None:
+                raise ValueError("bundle was not found")
+            if not Path(entry.archive).is_file():
+                raise ValueError("the source bundle is no longer available at its saved location")
+            report = open_bundle(
+                entry.archive,
+                self.workspace_root,
+                force_validate=self.force_validate,
+            )
+            self._accept_report(report)
+        except Exception as error:
+            with self.state_lock:
+                self.report = None
+                self.state_status = "failed"
+                self.state_error = str(error)
+                self.active_bundle_id = ""
+                self.active_nickname = ""
 
 
 class LocalExplorerHandler(BaseHTTPRequestHandler):
@@ -160,6 +257,18 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
     def _reject(self, status: int = 404) -> None:
         self._send_json(status, {"error": "not found"})
 
+    def _read_json_body(self) -> Dict[str, Any]:
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            raise ValueError("invalid request length")
+        if content_length < 1 or content_length > MAX_REQUEST_BYTES:
+            raise ValueError("invalid request length")
+        payload = json.loads(self.rfile.read(content_length))
+        if not isinstance(payload, dict):
+            raise ValueError("request body must be an object")
+        return payload
+
     def do_GET(self) -> None:
         if not self._request_is_local():
             self._reject(403)
@@ -197,6 +306,38 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
                 self.server.status_payload(),
             )
             return
+        if path == self.server.base_path + "/api/library/show":
+            shown = self.server.show_library()
+            self._send_json(
+                200 if shown else 409,
+                self.server.status_payload(),
+            )
+            return
+        if path == self.server.base_path + "/api/library/open":
+            try:
+                payload = self._read_json_body()
+                bundle_id = payload.get("bundle_id")
+                if not isinstance(bundle_id, str) or not bundle_id:
+                    raise ValueError("bundle selection is invalid")
+                started = self.server.begin_open(bundle_id)
+                if not started:
+                    raise ValueError("bundle could not be opened")
+                self._send_json(202, self.server.status_payload())
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            return
+        if path == self.server.base_path + "/api/library/rename":
+            try:
+                payload = self._read_json_body()
+                bundle_id = payload.get("bundle_id")
+                nickname = payload.get("nickname")
+                if not isinstance(bundle_id, str) or not isinstance(nickname, str):
+                    raise ValueError("nickname request is invalid")
+                self.server.rename_bundle(bundle_id, nickname)
+                self._send_json(200, self.server.status_payload())
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            return
         if path != self.server.base_path + "/api/search":
             self._reject()
             return
@@ -206,15 +347,7 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
             self._send_json(409, {"error": "choose and verify a bundle first"})
             return
         try:
-            content_length = int(self.headers.get("Content-Length", "0"))
-        except ValueError:
-            self._send_json(400, {"error": "invalid request length"})
-            return
-        if content_length < 1 or content_length > MAX_REQUEST_BYTES:
-            self._send_json(400, {"error": "invalid request length"})
-            return
-        try:
-            payload = json.loads(self.rfile.read(content_length))
+            payload = self._read_json_body()
             query = payload.get("query", "")
             if not isinstance(query, str) or len(query) > MAX_QUERY_CHARACTERS:
                 raise ValueError("search query is invalid")
@@ -242,8 +375,16 @@ def _run_server(server: LocalExplorerServer, open_browser: bool) -> None:
             pass
 
 
-def serve(report: WorkspaceReport, port: int, open_browser: bool) -> None:
-    _run_server(LocalExplorerServer(report, port), open_browser)
+def serve(
+    report: WorkspaceReport,
+    workspace_root: Path,
+    port: int,
+    open_browser: bool,
+) -> None:
+    _run_server(
+        LocalExplorerServer(report, port, workspace_root=workspace_root),
+        open_browser,
+    )
 
 
 def serve_launcher(

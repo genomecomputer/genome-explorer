@@ -181,12 +181,18 @@ def run_server(
     workspace_root: Optional[Path] = None,
 ) -> None:
     print("Opening the bundle...", flush=True)
+    selected_workspace_root = workspace_root or _workspace_root()
     report = open_bundle(
         archive,
-        workspace_root or _workspace_root(),
+        selected_workspace_root,
         force_validate=force_validate,
     )
-    serve(report, port=port, open_browser=open_browser)
+    serve(
+        report,
+        workspace_root=selected_workspace_root,
+        port=port,
+        open_browser=open_browser,
+    )
 
 
 def main() -> None:

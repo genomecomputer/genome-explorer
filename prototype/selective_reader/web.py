@@ -79,6 +79,41 @@ PAGE = r'''<!doctype html>
     }
     .choose-button:hover { background: var(--accent-dark); }
     .choose-button:disabled { cursor: wait; opacity: .72; }
+    .bundle-library { margin-top: 36px; }
+    .library-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 13px; }
+    .library-head h2 { margin: 0; font-size: 22px; letter-spacing: -.03em; }
+    .library-head p { margin: 0; color: var(--muted); font-size: 13px; }
+    .bundle-list { display: grid; gap: 10px; }
+    .bundle-item {
+      display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 15px;
+      padding: 17px; background: rgba(255,255,255,.92); border: 1px solid var(--line); border-radius: 15px;
+      box-shadow: 0 5px 20px rgba(25,54,43,.04);
+    }
+    .bundle-avatar {
+      width: 42px; height: 42px; display: grid; place-items: center; color: var(--accent-dark);
+      background: var(--accent-soft); border-radius: 12px; font-size: 15px; font-weight: 820; text-transform: uppercase;
+    }
+    .bundle-name { margin: 0; font-size: 17px; letter-spacing: -.015em; }
+    .bundle-meta { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+    .bundle-unavailable { color: #8a3d36; }
+    .bundle-actions { display: flex; align-items: center; gap: 8px; }
+    .secondary-button, .text-button {
+      min-height: 38px; padding: 0 13px; border-radius: 10px; font-size: 13px; font-weight: 720; cursor: pointer;
+    }
+    .secondary-button { color: white; background: var(--accent); border: 1px solid var(--accent); }
+    .secondary-button:hover { background: var(--accent-dark); }
+    .text-button { color: var(--accent-dark); background: transparent; border: 1px solid var(--line); }
+    .text-button:hover { background: var(--soft); }
+    .secondary-button:disabled, .text-button:disabled { cursor: not-allowed; opacity: .5; }
+    .nickname-form { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+    .nickname-input {
+      width: min(320px, 100%); min-height: 38px; padding: 8px 10px; color: var(--ink); background: white;
+      border: 1px solid #b9cbc1; border-radius: 9px; outline: none;
+    }
+    .nickname-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(23,107,77,.10); }
+    .nickname-error { margin: 7px 0 0; color: #8a3d36; font-size: 12px; }
+    .bundle-library:not([hidden]) + .selection-status { margin-top: 13px; }
+    .bundle-library:not([hidden]) ~ .open-card { margin-top: 18px; box-shadow: none; }
     .selection-status {
       display: flex; align-items: flex-start; gap: 10px; margin: 13px 0 0; padding: 13px 15px;
       color: #43544c; background: var(--blue-soft); border: 1px solid #d6e5ef; border-radius: 12px;
@@ -224,6 +259,8 @@ PAGE = r'''<!doctype html>
       .open-card { grid-template-columns: auto 1fr; }
       .choose-button { grid-column: 1 / -1; }
       .trust-grid { grid-template-columns: 1fr; }
+      .bundle-item { grid-template-columns: auto minmax(0, 1fr); }
+      .bundle-actions { grid-column: 1 / -1; justify-content: flex-end; }
     }
     @media (max-width: 480px) {
       h1 { font-size: 40px; }
@@ -237,6 +274,13 @@ PAGE = r'''<!doctype html>
       .welcome { padding-top: 52px; }
       .open-card { grid-template-columns: 1fr; }
       .open-icon { width: 46px; height: 46px; }
+      .library-head { align-items: flex-start; flex-direction: column; gap: 5px; }
+      .bundle-item { grid-template-columns: 1fr; }
+      .bundle-avatar { width: 38px; height: 38px; }
+      .bundle-actions { grid-column: auto; justify-content: stretch; }
+      .bundle-actions button { flex: 1; }
+      .nickname-form { align-items: stretch; flex-direction: column; }
+      .nickname-input { width: 100%; }
     }
   </style>
 </head>
@@ -251,30 +295,39 @@ PAGE = r'''<!doctype html>
       </div>
       <div class="header-actions">
         <div class="privacy"><span class="privacy-dot"></span>Stays on this computer</div>
+        <button class="quit-button" id="bundles-button" type="button" hidden>Bundles</button>
         <button class="quit-button" id="quit-button" type="button">Quit</button>
       </div>
     </header>
 
     <main class="welcome" id="welcome">
       <p class="eyebrow">Welcome to Genome Explorer</p>
-      <h1>Explore your genome bundle privately.</h1>
-      <p class="lede">Choose a compatible bundle to get started. It stays on this computer and is never uploaded.</p>
+      <h1 id="welcome-title">Explore your genome bundle privately.</h1>
+      <p class="lede" id="welcome-lede">Choose a compatible bundle to get started. It stays on this computer and is never uploaded.</p>
 
-      <section class="open-card" aria-labelledby="open-title">
-        <div class="open-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7.5h5l1.6 2H20v8.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7.5Z"/><path d="M4 8V6a2 2 0 0 1 2-2h3l1.6 2H18a2 2 0 0 1 2 2v1.5"/></svg>
+      <section class="bundle-library" id="bundle-library" aria-labelledby="library-title" hidden>
+        <div class="library-head">
+          <h2 id="library-title">Your bundles</h2>
+          <p>Saved on this computer</p>
         </div>
-        <div class="open-copy">
-          <h2 id="open-title">Open a genome bundle</h2>
-          <p>Select a compatible genome bundle from this computer. The original file will not be changed.</p>
-        </div>
-        <button class="choose-button" id="choose-button" type="button">Choose genome bundle</button>
+        <div class="bundle-list" id="bundle-list"></div>
       </section>
 
       <div class="selection-status" id="selection-status" hidden aria-live="polite">
         <span class="status-spinner" id="status-spinner" aria-hidden="true"></span>
         <span id="selection-message"></span>
       </div>
+
+      <section class="open-card" aria-labelledby="open-title">
+        <div class="open-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7.5h5l1.6 2H20v8.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7.5Z"/><path d="M4 8V6a2 2 0 0 1 2-2h3l1.6 2H18a2 2 0 0 1 2 2v1.5"/></svg>
+        </div>
+        <div class="open-copy">
+          <h2 id="open-title">Add a genome bundle</h2>
+          <p>Select a compatible genome bundle from this computer. The original file will not be changed.</p>
+        </div>
+        <button class="choose-button" id="choose-button" type="button">Add genome bundle</button>
+      </section>
 
       <div class="trust-grid" aria-label="Privacy information">
         <div class="trust-item"><strong>Stays local</strong><span>The bundle is read only on this computer.</span></div>
@@ -284,7 +337,7 @@ PAGE = r'''<!doctype html>
     </main>
 
     <main id="explorer" hidden>
-      <p class="eyebrow">Your genome bundle is ready</p>
+      <p class="eyebrow">Exploring <span id="active-bundle-name">your genome bundle</span></p>
       <h1>What would you like to explore?</h1>
       <p class="lede">Search a medication, trait, condition, or gene. Genome Explorer only shows information already recorded in this bundle.</p>
 
@@ -336,6 +389,7 @@ PAGE = r'''<!doctype html>
             <summary><span>Bundle details</span><span class="bundle-summary" id="bundle-summary">Verified and ready</span></summary>
             <div class="disclosure-body">
               <dl class="bundle-facts">
+                <div class="bundle-fact"><dt>Nickname</dt><dd id="bundle-nickname">Loading</dd></div>
                 <div class="bundle-fact"><dt>Status</dt><dd id="validation">Verified</dd></div>
                 <div class="bundle-fact"><dt>Genome reference</dt><dd id="build">Loading</dd></div>
                 <div class="bundle-fact"><dt>Bundle date</dt><dd id="snapshot">Loading</dd></div>
@@ -364,6 +418,11 @@ PAGE = r'''<!doctype html>
     const basePath = "__BASE_PATH__";
     const welcome = document.querySelector("#welcome");
     const explorer = document.querySelector("#explorer");
+    const welcomeTitle = document.querySelector("#welcome-title");
+    const welcomeLede = document.querySelector("#welcome-lede");
+    const bundleLibrary = document.querySelector("#bundle-library");
+    const bundleList = document.querySelector("#bundle-list");
+    const openTitle = document.querySelector("#open-title");
     const chooseButton = document.querySelector("#choose-button");
     const selectionStatus = document.querySelector("#selection-status");
     const selectionMessage = document.querySelector("#selection-message");
@@ -373,9 +432,11 @@ PAGE = r'''<!doctype html>
     const button = document.querySelector("#search-button");
     const results = document.querySelector("#results");
     const content = document.querySelector("#result-content");
+    const bundlesButton = document.querySelector("#bundles-button");
     const quitButton = document.querySelector("#quit-button");
     let statusTimer = null;
     let explorerReady = false;
+    let latestStatus = null;
 
     const fieldLabels = {
       variant_id: "Variant identifier", rsid: "rsID", chrom: "Chromosome", pos: "Position",
@@ -423,6 +484,144 @@ PAGE = r'''<!doctype html>
       return `${value.toFixed(index ? 1 : 0)} ${units[index]}`;
     }
 
+    function formatBundleDate(value) {
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return "Date not recorded";
+      return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    }
+
+    async function postJson(path, payload) {
+      const options = { method: "POST" };
+      if (payload !== undefined) {
+        options.headers = { "Content-Type": "application/json" };
+        options.body = JSON.stringify(payload);
+      }
+      const response = await fetch(`${basePath}${path}`, options);
+      const status = await response.json();
+      if (!response.ok) throw new Error(status.error || "The local request could not be completed.");
+      return status;
+    }
+
+    function beginNicknameEdit(body, actions, entry) {
+      if (body.querySelector(".nickname-form")) return;
+      actions.hidden = true;
+      const form = document.createElement("form");
+      form.className = "nickname-form";
+      const nickname = document.createElement("input");
+      nickname.className = "nickname-input";
+      nickname.type = "text";
+      nickname.maxLength = 80;
+      nickname.value = entry.nickname;
+      nickname.setAttribute("aria-label", `Nickname for ${entry.file_name}`);
+      const save = document.createElement("button");
+      save.className = "secondary-button";
+      save.type = "submit";
+      save.textContent = "Save";
+      const cancel = document.createElement("button");
+      cancel.className = "text-button";
+      cancel.type = "button";
+      cancel.textContent = "Cancel";
+      const error = document.createElement("p");
+      error.className = "nickname-error";
+      error.hidden = true;
+      form.append(nickname, save, cancel);
+      body.append(form, error);
+
+      cancel.addEventListener("click", () => renderBundleLibrary(latestStatus));
+      form.addEventListener("submit", async event => {
+        event.preventDefault();
+        save.disabled = true;
+        cancel.disabled = true;
+        error.hidden = true;
+        try {
+          const status = await postJson("/api/library/rename", {
+            bundle_id: entry.bundle_id,
+            nickname: nickname.value
+          });
+          renderAppStatus(status);
+        } catch (requestError) {
+          error.textContent = requestError.message;
+          error.hidden = false;
+          save.disabled = false;
+          cancel.disabled = false;
+        }
+      });
+      nickname.focus();
+      nickname.select();
+    }
+
+    async function openSavedBundle(entry) {
+      showSelectionStatus(`Opening ${entry.nickname} locally.`, { busy: true });
+      bundleList.querySelectorAll("button").forEach(control => { control.disabled = true; });
+      try {
+        const status = await postJson("/api/library/open", { bundle_id: entry.bundle_id });
+        renderAppStatus(status);
+        if (status.status === "validating") scheduleStatusPoll(150);
+      } catch (error) {
+        showSelectionStatus(error.message, { error: true });
+        refreshStatus();
+      }
+    }
+
+    function bundleItem(entry, busy) {
+      const item = document.createElement("article");
+      item.className = "bundle-item";
+      const avatar = document.createElement("div");
+      avatar.className = "bundle-avatar";
+      avatar.setAttribute("aria-hidden", "true");
+      avatar.textContent = entry.nickname.trim().charAt(0) || "G";
+      const body = document.createElement("div");
+      const name = document.createElement("h3");
+      name.className = "bundle-name";
+      name.textContent = entry.nickname;
+      const meta = document.createElement("p");
+      meta.className = "bundle-meta";
+      meta.textContent = `${entry.file_name} · ${entry.genome_build} · ${formatBundleDate(entry.generated_at)}`;
+      body.append(name, meta);
+      if (!entry.available) {
+        const unavailable = document.createElement("p");
+        unavailable.className = "bundle-meta bundle-unavailable";
+        unavailable.textContent = "Source file is no longer available at its saved location.";
+        body.append(unavailable);
+      }
+      const actions = document.createElement("div");
+      actions.className = "bundle-actions";
+      const rename = document.createElement("button");
+      rename.className = "text-button";
+      rename.type = "button";
+      rename.textContent = "Rename";
+      rename.disabled = busy;
+      rename.addEventListener("click", () => beginNicknameEdit(body, actions, entry));
+      const open = document.createElement("button");
+      open.className = "secondary-button bundle-open";
+      open.type = "button";
+      open.textContent = "Open";
+      open.disabled = busy || !entry.available;
+      open.addEventListener("click", () => openSavedBundle(entry));
+      actions.append(rename, open);
+      item.append(avatar, body, actions);
+      return item;
+    }
+
+    function renderBundleLibrary(status) {
+      latestStatus = status;
+      const bundles = Array.isArray(status?.bundles) ? status.bundles : [];
+      const busy = status?.status === "choosing" || status?.status === "validating";
+      bundleLibrary.hidden = bundles.length === 0;
+      bundleList.replaceChildren(...bundles.map(entry => bundleItem(entry, busy)));
+      if (bundles.length) {
+        welcomeTitle.textContent = "Choose a genome bundle.";
+        welcomeLede.textContent = "Reopen a previously verified bundle or add another. Nicknames and retained data stay on this computer.";
+        openTitle.textContent = "Add another genome bundle";
+        if (!busy) chooseButton.textContent = "Add another bundle";
+      } else {
+        welcomeTitle.textContent = "Explore your genome bundle privately.";
+        welcomeLede.textContent = "Choose a compatible bundle to get started. It stays on this computer and is never uploaded.";
+        openTitle.textContent = "Add a genome bundle";
+        if (!busy) chooseButton.textContent = "Add genome bundle";
+      }
+    }
+
     function showSelectionStatus(message, { busy = false, error = false } = {}) {
       selectionStatus.hidden = !message;
       selectionStatus.classList.toggle("error", error);
@@ -432,6 +631,9 @@ PAGE = r'''<!doctype html>
 
     function populateBundleStatus(status) {
       const cached = status.validation_mode === "cached";
+      const nickname = status.active_nickname || "Genome bundle";
+      document.querySelector("#active-bundle-name").textContent = nickname;
+      document.querySelector("#bundle-nickname").textContent = nickname;
       document.querySelector("#validation").textContent = cached ? "Previously verified" : "Verified";
       document.querySelector("#build").textContent = status.genome_build;
       document.querySelector("#snapshot").textContent = new Date(status.generated_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
@@ -440,13 +642,19 @@ PAGE = r'''<!doctype html>
     }
 
     function renderAppStatus(status) {
+      renderBundleLibrary(status);
       if (status.status === "ready") {
         welcome.hidden = true;
         explorer.hidden = false;
+        bundlesButton.hidden = !(status.bundles || []).length;
+        bundlesButton.disabled = false;
         chooseButton.disabled = false;
         populateBundleStatus(status);
         if (!explorerReady) {
           explorerReady = true;
+          input.value = "";
+          results.hidden = true;
+          content.replaceChildren();
           input.focus();
         }
         return;
@@ -454,6 +662,8 @@ PAGE = r'''<!doctype html>
 
       welcome.hidden = false;
       explorer.hidden = true;
+      bundlesButton.hidden = true;
+      bundlesButton.disabled = false;
       explorerReady = false;
       if (status.status === "choosing") {
         chooseButton.disabled = true;
@@ -461,16 +671,15 @@ PAGE = r'''<!doctype html>
         showSelectionStatus("Choose a genome bundle in the file window that just opened.", { busy: true });
       } else if (status.status === "validating") {
         chooseButton.disabled = true;
-        chooseButton.textContent = "Verifying bundle";
+        chooseButton.textContent = "Opening bundle";
         const name = status.archive_name || "your bundle";
-        showSelectionStatus(`Verifying ${name} locally. Large bundles may take a few minutes.`, { busy: true });
+        showSelectionStatus(`Opening ${name} locally. New bundles may take a few minutes to verify.`, { busy: true });
       } else if (status.status === "failed") {
         chooseButton.disabled = false;
-        chooseButton.textContent = "Choose another bundle";
+        chooseButton.textContent = (status.bundles || []).length ? "Add another bundle" : "Choose another bundle";
         showSelectionStatus(status.error || "This bundle could not be opened.", { error: true });
       } else {
         chooseButton.disabled = false;
-        chooseButton.textContent = "Choose genome bundle";
         showSelectionStatus("");
       }
     }
@@ -812,14 +1021,24 @@ PAGE = r'''<!doctype html>
       chooseButton.textContent = "Opening file selector";
       showSelectionStatus("Opening the local file selector.", { busy: true });
       try {
-        const response = await fetch(`${basePath}/api/select`, { method: "POST" });
-        const status = await response.json();
+        const status = await postJson("/api/select");
         renderAppStatus(status);
         if (status.status === "choosing" || status.status === "validating") scheduleStatusPoll(150);
       } catch (error) {
         chooseButton.disabled = false;
         chooseButton.textContent = "Try again";
-        showSelectionStatus("The local file selector could not be opened.", { error: true });
+        showSelectionStatus(error.message || "The local file selector could not be opened.", { error: true });
+      }
+    });
+
+    bundlesButton.addEventListener("click", async () => {
+      window.clearTimeout(statusTimer);
+      bundlesButton.disabled = true;
+      try {
+        const status = await postJson("/api/library/show");
+        renderAppStatus(status);
+      } catch (error) {
+        bundlesButton.disabled = false;
       }
     });
 
