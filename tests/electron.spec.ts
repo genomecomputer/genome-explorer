@@ -57,7 +57,17 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await firstWindow.getByRole("button", { name: "Add genome bundle" }).click();
     await expect(firstWindow.locator("#explorer")).toBeVisible({ timeout: 90_000 });
     await expect(firstWindow.locator("#validation")).toHaveText("Verified");
-    await expect(firstWindow.locator("#prototype-switcher")).toBeHidden();
+    await expect(firstWindow.locator(".topic-browser")).toBeVisible();
+    await expect(firstWindow.getByRole("tab", { name: /Results in this bundle/ })).toHaveAttribute("aria-selected", "true");
+    await expect(firstWindow.locator(".directory-row").first()).toBeVisible();
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await firstWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "topic-library.png"),
+        fullPage: true,
+      });
+    }
+    await firstWindow.getByRole("tab", { name: /Medications/ }).click();
+    await expect(firstWindow.locator(".directory-row")).toHaveCount(15);
 
     await firstWindow.getByRole("searchbox", { name: "Search your genome bundle" }).fill("CYP2C19");
     await firstWindow.getByRole("button", { name: "Search", exact: true }).click();

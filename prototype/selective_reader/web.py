@@ -1,5 +1,5 @@
-# Three topic-library variants, switchable with ?variant=, on the existing
-# explorer screen. The variants test information hierarchy, not new inference.
+# The topic library is a compact directory. It separates person-specific bundle
+# fields from research context and never derives a new health interpretation.
 PAGE = r'''<!doctype html>
 <html lang="en">
 <head>
@@ -166,89 +166,63 @@ PAGE = r'''<!doctype html>
     }
     .catalog-note svg { flex: 0 0 auto; margin-top: 1px; }
     .topic-catalog { margin-top: 20px; }
-    .topic-kind-label { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
-    .topic-kind-copy { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
     .topic-statuses { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
     .topic-status {
       display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; color: #405048;
       background: var(--soft); border-radius: 999px; font-size: 10px; font-weight: 700;
     }
     .topic-status.recorded { color: var(--accent-dark); background: var(--accent-soft); }
+    .topic-status.research { color: #37566d; background: var(--blue-soft); }
     .topic-status-dot { width: 5px; height: 5px; background: #91a39a; border-radius: 50%; }
     .topic-status.recorded .topic-status-dot { background: #269663; }
-    .topic-open {
-      display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
-      color: inherit; background: transparent; border: 0; text-align: left; cursor: pointer;
+    .topic-browser {
+      display: grid; grid-template-columns: 210px minmax(0, 1fr); overflow: hidden;
+      background: rgba(255,255,255,.86); border: 1px solid var(--line); border-radius: 16px;
+      box-shadow: 0 7px 26px rgba(25,54,43,.045);
     }
-    .topic-open-arrow { color: var(--accent); font-size: 17px; }
-    .topic-open:hover .topic-open-arrow { transform: translateX(2px); }
-
-    .topic-tabs { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
-    .topic-tab {
-      padding: 8px 12px; color: #526159; background: rgba(255,255,255,.72); border: 1px solid var(--line);
-      border-radius: 999px; font-size: 12px; font-weight: 700; cursor: pointer;
+    .directory-nav { padding: 15px; background: rgba(243,247,244,.82); border-right: 1px solid var(--line); }
+    .directory-nav-label {
+      margin: 2px 8px 10px; color: var(--muted); font-size: 10px; font-weight: 800;
+      letter-spacing: .09em; text-transform: uppercase;
     }
-    .topic-tab[aria-selected="true"] { color: white; background: var(--accent); border-color: var(--accent); }
-    .topic-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-    .topic-card {
-      min-height: 138px; padding: 17px; background: rgba(255,255,255,.9); border: 1px solid var(--line);
-      border-radius: 14px; box-shadow: 0 5px 20px rgba(25,54,43,.035);
+    .directory-nav-list { display: grid; gap: 4px; }
+    .directory-nav-button {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%;
+      padding: 10px 11px; color: #415149; background: transparent; border: 0; border-radius: 10px;
+      font-size: 13px; font-weight: 700; text-align: left; cursor: pointer;
     }
-    .topic-card h3 { margin: 6px 0 0; font-size: 16px; line-height: 1.3; letter-spacing: -.015em; }
-    .topic-card .topic-open { height: 100%; align-items: flex-start; }
-    .topic-card-copy { display: flex; min-width: 0; height: 100%; flex-direction: column; }
-    .topic-card .topic-statuses { margin-top: auto; padding-top: 16px; }
-
-    .guided-layout { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-    .guided-column { padding: 20px; background: rgba(255,255,255,.84); border: 1px solid var(--line); border-radius: 16px; }
-    .guided-icon {
-      width: 38px; height: 38px; display: grid; place-items: center; margin-bottom: 16px;
-      color: var(--accent); background: var(--accent-soft); border-radius: 11px; font-weight: 800;
+    .directory-nav-button:hover { background: rgba(255,255,255,.82); }
+    .directory-nav-button[aria-selected="true"] { color: var(--accent-dark); background: white; box-shadow: 0 1px 5px rgba(25,54,43,.08); }
+    .directory-nav-count {
+      min-width: 25px; padding: 3px 6px; color: var(--muted); background: rgba(101,115,109,.09);
+      border-radius: 999px; font-size: 10px; text-align: center;
     }
-    .guided-column h3 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
-    .guided-column > p { min-height: 58px; margin: 8px 0 17px; color: var(--muted); font-size: 13px; line-height: 1.5; }
-    .topic-group { border-top: 1px solid var(--line); }
-    .topic-group summary { padding: 13px 0; list-style: none; font-size: 12px; font-weight: 760; cursor: pointer; }
-    .topic-group summary::-webkit-details-marker { display: none; }
-    .guided-topic-list { display: grid; gap: 4px; padding-bottom: 11px; }
-    .guided-topic {
-      padding: 9px 10px; background: var(--soft); border: 0; border-radius: 9px; font-size: 12px; cursor: pointer; text-align: left;
-    }
-    .guided-topic:hover { color: var(--accent-dark); background: var(--accent-soft); }
-    .guided-topic.recorded::after { content: "Recorded"; float: right; margin-left: 8px; color: var(--accent); font-size: 9px; font-weight: 800; text-transform: uppercase; }
-
-    .directory-toolbar { display: grid; grid-template-columns: minmax(200px, 1fr) auto; gap: 10px; margin-bottom: 12px; }
+    .directory-nav-button[aria-selected="true"] .directory-nav-count { color: var(--accent-dark); background: var(--accent-soft); }
+    .directory-main { min-width: 0; padding: 20px; }
+    .directory-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, 260px); align-items: end; gap: 18px; margin-bottom: 20px; }
+    .directory-title { margin: 0; font-size: 19px; letter-spacing: -.025em; }
+    .directory-description { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
     input.directory-filter {
       min-height: 43px; padding: 10px 13px; color: var(--ink); background: white; border: 1px solid var(--line);
       border-radius: 11px; outline: none;
     }
     input.directory-filter:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(23,107,77,.1); }
-    .directory-kinds { display: flex; align-items: center; gap: 6px; }
-    .directory-list { overflow: hidden; background: rgba(255,255,255,.86); border: 1px solid var(--line); border-radius: 14px; }
+    .directory-groups { display: grid; gap: 20px; }
+    .directory-group-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 2px 8px; }
+    .directory-group-head h4 { margin: 0; color: #48584f; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .directory-group-count { color: var(--muted); font-size: 10px; }
+    .directory-list { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; }
     .directory-row {
-      display: grid; grid-template-columns: minmax(190px, 1.1fr) minmax(150px, .8fr) minmax(220px, 1fr) 26px;
+      display: grid; grid-template-columns: minmax(170px, 1fr) minmax(220px, auto) 22px;
       align-items: center; gap: 14px; width: 100%; padding: 13px 15px; color: inherit; background: transparent;
       border: 0; border-bottom: 1px solid var(--line); text-align: left; cursor: pointer;
     }
     .directory-row:last-child { border-bottom: 0; }
     .directory-row:hover { background: var(--soft); }
     .directory-name { font-size: 14px; font-weight: 730; }
-    .directory-group { color: var(--muted); font-size: 11px; }
     .directory-row .topic-statuses { margin: 0; }
     .directory-arrow { color: var(--accent); text-align: right; }
-    .directory-empty { padding: 30px; color: var(--muted); text-align: center; }
-
-    .prototype-switcher {
-      position: fixed; z-index: 10; left: 50%; bottom: 18px; display: flex; align-items: center; gap: 4px;
-      padding: 5px; color: white; background: rgba(20,33,29,.94); border: 1px solid rgba(255,255,255,.14);
-      border-radius: 999px; box-shadow: 0 12px 35px rgba(20,33,29,.28); backdrop-filter: blur(12px);
-      transform: translateX(-50%);
-    }
-    .prototype-switcher button {
-      width: 34px; height: 34px; color: white; background: transparent; border: 0; border-radius: 50%; cursor: pointer;
-    }
-    .prototype-switcher button:hover { background: rgba(255,255,255,.12); }
-    .prototype-variant-label { min-width: 174px; padding: 0 8px; font-size: 11px; font-weight: 700; text-align: center; }
+    .directory-empty { padding: 34px 24px; color: var(--muted); text-align: center; border: 1px dashed #cbd8d0; border-radius: 11px; }
     .way-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
     .way {
       display: flex; flex-direction: column; min-height: 210px; padding: 23px;
@@ -349,13 +323,11 @@ PAGE = r'''<!doctype html>
       .way-grid, .secondary-tools { grid-template-columns: 1fr; }
       .way { min-height: 0; }
       .topic-library-head { align-items: flex-start; flex-direction: column; gap: 8px; }
-      .topic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .guided-layout { grid-template-columns: 1fr; }
-      .guided-column > p { min-height: 0; }
+      .topic-browser { grid-template-columns: 1fr; }
+      .directory-nav { border-right: 0; border-bottom: 1px solid var(--line); }
+      .directory-nav-list { display: flex; overflow-x: auto; padding-bottom: 2px; }
+      .directory-nav-button { flex: 0 0 auto; width: auto; }
       .directory-toolbar { grid-template-columns: 1fr; }
-      .directory-kinds { overflow-x: auto; padding-bottom: 2px; }
-      .directory-row { grid-template-columns: minmax(150px, 1fr) minmax(170px, 1fr) 22px; }
-      .directory-group { display: none; }
       .section-variants .cards { grid-template-columns: 1fr; }
       .technical-fields { grid-template-columns: 1fr 1fr; }
       .open-card { grid-template-columns: auto 1fr; }
@@ -383,12 +355,9 @@ PAGE = r'''<!doctype html>
       .bundle-actions button { flex: 1; }
       .nickname-form { align-items: stretch; flex-direction: column; }
       .nickname-input { width: 100%; }
-      .topic-grid { grid-template-columns: 1fr; }
-      .topic-card { min-height: 118px; }
       .directory-row { grid-template-columns: minmax(0, 1fr) 22px; gap: 8px; }
       .directory-row .topic-statuses { grid-column: 1 / -1; grid-row: 2; }
       .directory-arrow { grid-column: 2; grid-row: 1; }
-      .prototype-variant-label { min-width: 150px; }
     }
   </style>
 </head>
@@ -465,7 +434,7 @@ PAGE = r'''<!doctype html>
         </div>
         <div class="catalog-note">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-          <span>These topics are search starting points, not findings. Green labels show the kind of matching record in this bundle. Research associations are context, not a personal diagnosis.</span>
+          <span>Personal PGx result and Recorded score identify person-specific fields from this bundle. Research context is a recorded association, not a finding about this person.</span>
         </div>
         <div class="topic-catalog" id="topic-catalog"></div>
 
@@ -510,12 +479,6 @@ PAGE = r'''<!doctype html>
       </section>
     </main>
   </div>
-  <nav class="prototype-switcher" id="prototype-switcher" aria-label="Topic library design variants" hidden>
-    <button id="previous-variant" type="button" aria-label="Previous design variant">&#8592;</button>
-    <span class="prototype-variant-label" id="prototype-variant-label"></span>
-    <button id="next-variant" type="button" aria-label="Next design variant">&#8594;</button>
-  </nav>
-
   <script nonce="__NONCE__">
     const basePath = "__BASE_PATH__";
     const welcome = document.querySelector("#welcome");
@@ -536,10 +499,6 @@ PAGE = r'''<!doctype html>
     const content = document.querySelector("#result-content");
     const topicCatalog = document.querySelector("#topic-catalog");
     const topicSummary = document.querySelector("#topic-summary");
-    const prototypeSwitcher = document.querySelector("#prototype-switcher");
-    const prototypeVariantLabel = document.querySelector("#prototype-variant-label");
-    const previousVariant = document.querySelector("#previous-variant");
-    const nextVariant = document.querySelector("#next-variant");
     const bundlesButton = document.querySelector("#bundles-button");
     const quitButton = document.querySelector("#quit-button");
     const desktop = window.genomeExplorer?.desktop === true;
@@ -548,7 +507,6 @@ PAGE = r'''<!doctype html>
     let explorerReady = false;
     let latestStatus = null;
     let latestTopics = [];
-    let catalogTab = "recorded";
 
     const fieldLabels = {
       variant_id: "Variant identifier", rsid: "rsID", chrom: "Chromosome", pos: "Position",
@@ -609,18 +567,35 @@ PAGE = r'''<!doctype html>
     const topicSectionLabels = {
       pharmacogenomics: "Personal PGx result",
       polygenic_scores: "Recorded score",
-      gwas: "Research associations"
+      gwas: "Research context"
     };
 
-    const topicVariants = {
-      A: "Catalog cards",
-      B: "Guided questions",
-      C: "A-Z directory"
+    const directoryViews = {
+      personal: {
+        label: "Results in this bundle",
+        title: "Person-specific results",
+        description: "Personal PGx results and recorded scores. Research-only matches are not included here."
+      },
+      medications: {
+        label: "Medications",
+        title: "Medications",
+        description: "Common medications, grouped by use. A green label means this bundle has a person-specific PGx result."
+      },
+      conditions: {
+        label: "Conditions",
+        title: "Conditions",
+        description: "Common conditions that may appear in recorded scores or research context."
+      },
+      traits: {
+        label: "Traits",
+        title: "Traits",
+        description: "Everyday traits that may appear in recorded scores or research context."
+      }
     };
 
-    function selectedTopicVariant() {
-      const requested = new URLSearchParams(window.location.search).get("variant")?.toUpperCase();
-      return Object.hasOwn(topicVariants, requested) ? requested : "A";
+    function isPersonSpecificTopic(topic) {
+      const sections = Array.isArray(topic.record_sections) ? topic.record_sections : [];
+      return sections.includes("pharmacogenomics") || sections.includes("polygenic_scores");
     }
 
     function statusChips(topic) {
@@ -630,13 +605,13 @@ PAGE = r'''<!doctype html>
       if (!sections.length) {
         const chip = document.createElement("span");
         chip.className = "topic-status";
-        chip.innerHTML = '<span class="topic-status-dot"></span>No catalog match';
+        chip.innerHTML = '<span class="topic-status-dot"></span>No matching record';
         chips.append(chip);
         return chips;
       }
       sections.forEach(section => {
         const chip = document.createElement("span");
-        chip.className = "topic-status recorded";
+        chip.className = `topic-status ${section === "gwas" ? "research" : "recorded"}`;
         const dot = document.createElement("span");
         dot.className = "topic-status-dot";
         const label = document.createElement("span");
@@ -647,227 +622,151 @@ PAGE = r'''<!doctype html>
       return chips;
     }
 
-    function topicCard(topic) {
-      const card = document.createElement("article");
-      card.className = "topic-card";
-      const open = document.createElement("button");
-      open.className = "topic-open";
-      open.type = "button";
-      open.dataset.topicQuery = topic.query;
-      open.setAttribute("aria-label", `Search this bundle for ${topic.label}`);
-      const copy = document.createElement("span");
-      copy.className = "topic-card-copy";
-      const kind = document.createElement("span");
-      kind.className = "topic-kind-label";
-      kind.textContent = topicKinds[topic.kind].label;
-      const title = document.createElement("h3");
-      title.textContent = topic.label;
-      copy.append(kind, title, statusChips(topic));
+    function directoryRow(topic) {
+      const row = document.createElement("button");
+      row.className = "directory-row";
+      row.type = "button";
+      row.dataset.topicQuery = topic.query;
+      row.setAttribute("aria-label", `Search this bundle for ${topic.label}`);
+      const name = document.createElement("span");
+      name.className = "directory-name";
+      name.textContent = topic.label;
       const arrow = document.createElement("span");
-      arrow.className = "topic-open-arrow";
+      arrow.className = "directory-arrow";
       arrow.setAttribute("aria-hidden", "true");
       arrow.textContent = "›";
-      open.append(copy, arrow);
-      card.append(open);
-      return card;
+      row.append(name, statusChips(topic), arrow);
+      return row;
     }
 
-    function topicRecordPriority(topic) {
-      const sections = Array.isArray(topic.record_sections) ? topic.record_sections : [];
-      if (sections.includes("pharmacogenomics")) return 0;
-      if (sections.includes("polygenic_scores")) return 1;
-      if (sections.includes("gwas")) return 2;
-      return 3;
-    }
-
-    function renderCatalogCards(topics) {
-      const fragment = document.createDocumentFragment();
-      const tabs = document.createElement("div");
-      tabs.className = "topic-tabs";
-      tabs.setAttribute("role", "tablist");
-      const choices = [
-        ["recorded", "In this bundle"],
-        ["medications", "Medications"],
-        ["conditions", "Conditions"],
-        ["traits", "Traits"],
-        ["all", "All topics"]
-      ];
-      choices.forEach(([key, label]) => {
-        const tab = document.createElement("button");
-        tab.className = "topic-tab";
-        tab.type = "button";
-        tab.setAttribute("role", "tab");
-        tab.setAttribute("aria-selected", String(catalogTab === key));
-        tab.textContent = label;
-        tab.addEventListener("click", () => {
-          catalogTab = key;
-          renderTopicCatalog(latestTopics);
-        });
-        tabs.append(tab);
-      });
-      fragment.append(tabs);
-
-      const visible = topics
-        .filter(topic => catalogTab === "all" || (catalogTab === "recorded" ? topic.recorded : topic.kind === catalogTab))
-        .sort((left, right) => topicRecordPriority(left) - topicRecordPriority(right) || left.label.localeCompare(right.label));
-      if (!visible.length) {
-        const empty = document.createElement("div");
-        empty.className = "directory-empty";
-        empty.textContent = "None of these catalog topics match the recorded fields in this bundle.";
-        fragment.append(empty);
-        return fragment;
-      }
-      const grid = document.createElement("div");
-      grid.className = "topic-grid";
-      visible.forEach(topic => grid.append(topicCard(topic)));
-      fragment.append(grid);
-      return fragment;
-    }
-
-    function renderGuidedQuestions(topics) {
-      const layout = document.createElement("div");
-      layout.className = "guided-layout";
-      Object.entries(topicKinds).forEach(([kindKey, config]) => {
-        const column = document.createElement("section");
-        column.className = "guided-column";
-        const icon = document.createElement("div");
-        icon.className = "guided-icon";
-        icon.setAttribute("aria-hidden", "true");
-        icon.textContent = config.icon;
-        const heading = document.createElement("h3");
-        heading.textContent = config.label;
-        const prompt = document.createElement("p");
-        prompt.textContent = config.prompt;
-        column.append(icon, heading, prompt);
-
-        const kindTopics = topics.filter(topic => topic.kind === kindKey);
-        const groups = Object.groupBy(kindTopics, topic => topic.group);
-        let openedGroup = false;
-        Object.entries(groups).forEach(([groupName, groupTopics]) => {
-          const details = document.createElement("details");
-          details.className = "topic-group";
-          if (!openedGroup && groupTopics.some(topic => topic.recorded)) {
-            details.open = true;
-            openedGroup = true;
-          }
-          const summary = document.createElement("summary");
-          summary.textContent = groupName;
-          const list = document.createElement("div");
-          list.className = "guided-topic-list";
-          groupTopics.forEach(topic => {
-            const topicButton = document.createElement("button");
-            topicButton.className = `guided-topic${topic.recorded ? " recorded" : ""}`;
-            topicButton.type = "button";
-            topicButton.dataset.topicQuery = topic.query;
-            topicButton.textContent = topic.label;
-            list.append(topicButton);
-          });
-          details.append(summary, list);
-          column.append(details);
-        });
-        const firstGroup = column.querySelector(".topic-group");
-        if (!openedGroup && firstGroup) firstGroup.open = true;
-        layout.append(column);
-      });
-      return layout;
-    }
-
-    function directoryRows(topics, filter, kind) {
-      const list = document.createElement("div");
-      list.className = "directory-list";
+    function topicsForDirectoryView(topics, view, filter) {
       const normalized = filter.trim().toLowerCase();
-      const visible = topics
-        .filter(topic => kind === "all" || topic.kind === kind)
-        .filter(topic => !normalized || `${topic.label} ${topic.group}`.toLowerCase().includes(normalized))
-        .sort((left, right) => left.label.localeCompare(right.label));
+      return topics
+        .filter(topic => view === "personal" ? isPersonSpecificTopic(topic) : topic.kind === view)
+        .filter(topic => !normalized || `${topic.label} ${topic.group}`.toLowerCase().includes(normalized));
+    }
+
+    function directoryGroups(topics, view, filter) {
+      const host = document.createElement("div");
+      host.className = "directory-groups";
+      const visible = topicsForDirectoryView(topics, view, filter);
       if (!visible.length) {
         const empty = document.createElement("div");
         empty.className = "directory-empty";
-        empty.textContent = "No catalog topics match that filter.";
-        list.append(empty);
-        return list;
+        empty.textContent = filter
+          ? "No topics match that filter."
+          : "This bundle does not contain a personal PGx result or recorded score for these common topics.";
+        host.append(empty);
+        return host;
       }
-      visible.forEach(topic => {
-        const row = document.createElement("button");
-        row.className = "directory-row";
-        row.type = "button";
-        row.dataset.topicQuery = topic.query;
-        const name = document.createElement("span");
-        name.className = "directory-name";
-        name.textContent = topic.label;
-        const group = document.createElement("span");
-        group.className = "directory-group";
-        group.textContent = `${topicKinds[topic.kind].label} · ${topic.group}`;
-        const arrow = document.createElement("span");
-        arrow.className = "directory-arrow";
-        arrow.setAttribute("aria-hidden", "true");
-        arrow.textContent = "›";
-        row.append(name, group, statusChips(topic), arrow);
-        list.append(row);
-      });
-      return list;
+      const grouped = Object.groupBy(
+        visible,
+        topic => view === "personal" ? topicKinds[topic.kind].label : topic.group
+      );
+      Object.entries(grouped)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .forEach(([groupName, groupTopics]) => {
+          const section = document.createElement("section");
+          section.className = "directory-group";
+          const groupHead = document.createElement("div");
+          groupHead.className = "directory-group-head";
+          const heading = document.createElement("h4");
+          heading.textContent = groupName;
+          const count = document.createElement("span");
+          count.className = "directory-group-count";
+          count.textContent = `${groupTopics.length} ${groupTopics.length === 1 ? "topic" : "topics"}`;
+          groupHead.append(heading, count);
+          const list = document.createElement("div");
+          list.className = "directory-list";
+          groupTopics
+            .sort((left, right) => left.label.localeCompare(right.label))
+            .forEach(topic => list.append(directoryRow(topic)));
+          section.append(groupHead, list);
+          host.append(section);
+        });
+      return host;
     }
 
     function renderDirectory(topics) {
       const wrapper = document.createElement("div");
+      wrapper.className = "topic-browser";
       let filterValue = "";
-      let kindValue = "all";
+      let viewValue = topics.some(isPersonSpecificTopic) ? "personal" : "medications";
+
+      const nav = document.createElement("aside");
+      nav.className = "directory-nav";
+      const navLabel = document.createElement("p");
+      navLabel.className = "directory-nav-label";
+      navLabel.textContent = "Browse by";
+      const navList = document.createElement("div");
+      navList.className = "directory-nav-list";
+      navList.setAttribute("role", "tablist");
+
+      const main = document.createElement("div");
+      main.className = "directory-main";
       const toolbar = document.createElement("div");
       toolbar.className = "directory-toolbar";
+      const toolbarCopy = document.createElement("div");
+      const title = document.createElement("h3");
+      title.className = "directory-title";
+      const description = document.createElement("p");
+      description.className = "directory-description";
+      toolbarCopy.append(title, description);
       const filter = document.createElement("input");
       filter.className = "directory-filter";
       filter.type = "search";
-      filter.placeholder = "Filter common topics";
       filter.setAttribute("aria-label", "Filter common topics");
-      const kinds = document.createElement("div");
-      kinds.className = "directory-kinds";
       const listHost = document.createElement("div");
-      const refreshRows = () => listHost.replaceChildren(directoryRows(topics, filterValue, kindValue));
-      [["all", "All"], ...Object.entries(topicKinds).map(([key, config]) => [key, config.label])].forEach(([key, label]) => {
-        const kindButton = document.createElement("button");
-        kindButton.className = "topic-tab";
-        kindButton.type = "button";
-        kindButton.setAttribute("aria-selected", String(kindValue === key));
-        kindButton.textContent = label;
-        kindButton.addEventListener("click", () => {
-          kindValue = key;
-          kinds.querySelectorAll(".topic-tab").forEach(control => control.setAttribute("aria-selected", String(control === kindButton)));
-          refreshRows();
+
+      const viewCount = key => topics.filter(topic => key === "personal" ? isPersonSpecificTopic(topic) : topic.kind === key).length;
+      const refresh = () => {
+        const view = directoryViews[viewValue];
+        title.textContent = view.title;
+        description.textContent = view.description;
+        filter.placeholder = viewValue === "personal" ? "Filter results" : `Filter ${view.label.toLowerCase()}`;
+        navList.querySelectorAll(".directory-nav-button").forEach(control => {
+          control.setAttribute("aria-selected", String(control.dataset.directoryView === viewValue));
         });
-        kinds.append(kindButton);
+        listHost.replaceChildren(directoryGroups(topics, viewValue, filterValue));
+      };
+
+      Object.entries(directoryViews).forEach(([key, view]) => {
+        const control = document.createElement("button");
+        control.className = "directory-nav-button";
+        control.type = "button";
+        control.dataset.directoryView = key;
+        control.setAttribute("role", "tab");
+        const label = document.createElement("span");
+        label.textContent = view.label;
+        const count = document.createElement("span");
+        count.className = "directory-nav-count";
+        count.textContent = viewCount(key);
+        control.append(label, count);
+        control.addEventListener("click", () => {
+          viewValue = key;
+          filterValue = "";
+          filter.value = "";
+          refresh();
+        });
+        navList.append(control);
       });
+
       filter.addEventListener("input", () => {
         filterValue = filter.value;
-        refreshRows();
+        refresh();
       });
-      toolbar.append(filter, kinds);
-      wrapper.append(toolbar, listHost);
-      refreshRows();
+      nav.append(navLabel, navList);
+      toolbar.append(toolbarCopy, filter);
+      main.append(toolbar, listHost);
+      wrapper.append(nav, main);
+      refresh();
       return wrapper;
     }
 
     function renderTopicCatalog(topics) {
       latestTopics = Array.isArray(topics) ? topics : [];
-      const personalPgx = latestTopics.filter(topic => topic.record_sections?.includes("pharmacogenomics")).length;
-      const scores = latestTopics.filter(topic => topic.record_sections?.includes("polygenic_scores")).length;
-      const research = latestTopics.filter(topic => topic.record_sections?.includes("gwas")).length;
-      topicSummary.textContent = `${personalPgx} personal PGx · ${scores} scores · ${research} research topics`;
-      const variant = selectedTopicVariant();
-      prototypeVariantLabel.textContent = `${variant} · ${topicVariants[variant]}`;
-      prototypeSwitcher.hidden = desktop;
-      if (variant === "B") topicCatalog.replaceChildren(renderGuidedQuestions(latestTopics));
-      else if (variant === "C") topicCatalog.replaceChildren(renderDirectory(latestTopics));
-      else topicCatalog.replaceChildren(renderCatalogCards(latestTopics));
-    }
-
-    function changeTopicVariant(direction) {
-      const variants = Object.keys(topicVariants);
-      const current = variants.indexOf(selectedTopicVariant());
-      const next = variants[(current + direction + variants.length) % variants.length];
-      const url = new URL(window.location.href);
-      url.searchParams.set("variant", next);
-      window.history.replaceState({}, "", url);
-      renderTopicCatalog(latestTopics);
+      topicSummary.textContent = `${latestTopics.length} searchable topics`;
+      topicCatalog.replaceChildren(renderDirectory(latestTopics));
     }
 
     function formatBytes(bytes) {
@@ -1057,7 +956,6 @@ PAGE = r'''<!doctype html>
 
       welcome.hidden = false;
       explorer.hidden = true;
-      prototypeSwitcher.hidden = true;
       bundlesButton.hidden = true;
       bundlesButton.disabled = false;
       explorerReady = false;
@@ -1418,16 +1316,6 @@ PAGE = r'''<!doctype html>
       input.value = trigger.dataset.topicQuery;
       search(input.value);
     });
-
-    if (!desktop) {
-      previousVariant.addEventListener("click", () => changeTopicVariant(-1));
-      nextVariant.addEventListener("click", () => changeTopicVariant(1));
-      window.addEventListener("keydown", event => {
-        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-        if (event.target.matches("input, textarea, [contenteditable]")) return;
-        changeTopicVariant(event.key === "ArrowLeft" ? -1 : 1);
-      });
-    }
 
     chooseButton.addEventListener("click", async () => {
       chooseButton.disabled = true;
