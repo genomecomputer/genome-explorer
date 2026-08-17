@@ -191,6 +191,15 @@ PAGE = r'''<!doctype html>
       margin: 16px 0 0; padding: 12px 14px; color: #526159; background: var(--soft);
       border-left: 3px solid #a9c9b8; border-radius: 0 10px 10px 0; font-size: 13px; line-height: 1.5;
     }
+    .personal-data {
+      margin-top: 20px; padding: 18px; background: var(--accent-soft); border: 1px solid #cde4d6; border-radius: 13px;
+    }
+    .data-group-label { margin: 0; color: var(--accent-dark); font-size: 10px; font-weight: 820; letter-spacing: .09em; text-transform: uppercase; }
+    .data-group-copy { margin: 7px 0 0; color: #405048; font-size: 13px; line-height: 1.5; }
+    .personal-data .simple-fields { margin-top: 16px; }
+    .reference-context { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .reference-context .data-group-label { color: var(--muted); }
+    .reference-context .simple-fields { margin-top: 15px; }
     .simple-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 22px; margin: 20px 0 0; }
     .field dt { margin-bottom: 5px; color: var(--muted); font-size: 10px; font-weight: 760; letter-spacing: .07em; text-transform: uppercase; }
     .field dd { margin: 0; overflow-wrap: anywhere; font-size: 14px; line-height: 1.45; }
@@ -374,8 +383,8 @@ PAGE = r'''<!doctype html>
       call_confidence: "Call confidence", gene: "Gene annotation", gene_symbol: "Gene",
       hgvsp: "Protein change", clinvar_significance: "ClinVar classification",
       clinvar_review_stars: "ClinVar review stars", clinvar_id: "ClinVar record",
-      clinical_grade: "Clinical-grade flag", diplotype: "Diplotype", phenotype: "Recorded result",
-      activity_score: "Activity score", copy_number: "Copy number", cpic_level: "Evidence level",
+      clinical_grade: "Clinical-grade flag", diplotype: "Recorded diplotype", phenotype: "Recorded phenotype",
+      activity_score: "Activity score", copy_number: "Copy number", cpic_level: "CPIC evidence level",
       affected_drugs: "Related medications", guideline_url: "Recorded guideline",
       trait: "Trait", score_value: "Recorded score", percentile: "Recorded percentile",
       reference_population: "Comparison group recorded in bundle", training_source: "Training source",
@@ -394,14 +403,14 @@ PAGE = r'''<!doctype html>
 
     const recordLabels = {
       variants: "Personal variant record", genes: "Personal gene summary",
-      pharmacogenomics: "Medication-related record", polygenic_scores: "Recorded score",
+      pharmacogenomics: "Bundle pharmacogenomic record", polygenic_scores: "Recorded score",
       gwas: "Research association"
     };
 
     const primaryFields = {
       variants: ["zygosity", "call_confidence"],
       genes: ["variant_count", "actionable_count"],
-      pharmacogenomics: ["phenotype", "cpic_level"],
+      pharmacogenomics: [],
       polygenic_scores: ["percentile", "reference_population"],
       gwas: ["gene", "source"]
     };
@@ -504,15 +513,18 @@ PAGE = r'''<!doctype html>
 
     function titleFor(hit, query) {
       if (hit.section === "pharmacogenomics") {
-        return capitalize(matchingMedication(hit, query)) || hit.gene_symbol;
+        return hit.gene_symbol;
       }
       if (hit.section === "variants") return hit.gene || hit.rsid || "Recorded variant";
       if (hit.section === "genes") return hit.gene_symbol;
       return hit.trait || hit.rsid || "Recorded result";
     }
 
-    function subtitleFor(hit) {
-      if (hit.section === "pharmacogenomics") return `Related gene: ${hit.gene_symbol}`;
+    function subtitleFor(hit, query) {
+      if (hit.section === "pharmacogenomics") {
+        const medication = matchingMedication(hit, query);
+        return medication ? `Matched medication: ${capitalize(medication)}` : "Person-specific bundle result";
+      }
       if (hit.section === "variants") return hit.rsid ? `Identifier: ${hit.rsid}` : "";
       if (hit.section === "genes") return "Personal variant records found";
       if (hit.section === "gwas") {
@@ -524,9 +536,7 @@ PAGE = r'''<!doctype html>
 
     function summaryFor(hit) {
       if (hit.section === "pharmacogenomics") {
-        return hit.phenotype
-          ? `The bundle records “${formatValue(hit.phenotype)}” for ${hit.gene_symbol}.`
-          : `The bundle contains a medication-related record for ${hit.gene_symbol}.`;
+        return `This bundle contains a person-specific pharmacogenomic result for ${hit.gene_symbol}.`;
       }
       if (hit.section === "polygenic_scores") return `The bundle contains a recorded score for ${hit.trait}.`;
       if (hit.section === "gwas") {
@@ -577,6 +587,55 @@ PAGE = r'''<!doctype html>
       return wrapper;
     }
 
+    function appendPharmacogenomicsData(card, hit, query) {
+      const personal = document.createElement("section");
+      personal.className = "personal-data";
+      const personalLabel = document.createElement("h4");
+      personalLabel.className = "data-group-label";
+      personalLabel.textContent = "Person-specific data from this bundle";
+      const personalCopy = document.createElement("p");
+      personalCopy.className = "data-group-copy";
+      personalCopy.textContent = "These values describe the person represented by this bundle.";
+      const personalFields = document.createElement("dl");
+      personalFields.className = "simple-fields";
+      ["diplotype", "phenotype", "activity_score", "copy_number"].forEach(key => {
+        const value = hit[key];
+        if (value !== null && value !== undefined && value !== "") {
+          personalFields.append(fieldElement(key, value, hit.section));
+        }
+      });
+      personal.append(personalLabel, personalCopy, personalFields);
+      card.append(personal);
+
+      const context = document.createElement("section");
+      context.className = "reference-context";
+      const contextLabel = document.createElement("h4");
+      contextLabel.className = "data-group-label";
+      contextLabel.textContent = "Reference context included in the bundle";
+      const contextCopy = document.createElement("p");
+      contextCopy.className = "data-group-copy";
+      const medication = matchingMedication(hit, query);
+      contextCopy.textContent = medication
+        ? `The bundle links ${hit.gene_symbol} with recorded guidance for ${capitalize(medication)}. This context is not unique to this person.`
+        : `The bundle includes recorded medication guidance for ${hit.gene_symbol}. This context is not unique to this person.`;
+      const contextFields = document.createElement("dl");
+      contextFields.className = "simple-fields";
+      if (hit.cpic_level !== null && hit.cpic_level !== undefined && hit.cpic_level !== "") {
+        contextFields.append(fieldElement("cpic_level", hit.cpic_level, hit.section));
+      }
+      context.append(contextLabel, contextCopy, contextFields);
+      if (typeof hit.guideline_url === "string" && hit.guideline_url.startsWith("https://")) {
+        const source = document.createElement("a");
+        source.className = "source-link";
+        source.href = hit.guideline_url;
+        source.target = "_blank";
+        source.rel = "noopener noreferrer";
+        source.textContent = "View recorded guideline";
+        context.append(source);
+      }
+      card.append(context);
+    }
+
     function cardFor(hit, query) {
       const card = document.createElement("article");
       card.className = "card";
@@ -592,7 +651,7 @@ PAGE = r'''<!doctype html>
       title.textContent = titleFor(hit, query);
       const subtitle = document.createElement("div");
       subtitle.className = "card-id";
-      subtitle.textContent = subtitleFor(hit);
+      subtitle.textContent = subtitleFor(hit, query);
       top.append(title, subtitle);
       card.append(top);
 
@@ -609,15 +668,19 @@ PAGE = r'''<!doctype html>
         card.append(note);
       }
 
-      const simple = document.createElement("dl");
-      simple.className = "simple-fields";
-      (primaryFields[hit.section] || []).forEach(key => {
-        const value = hit[key];
-        if (value !== null && value !== undefined && value !== "") simple.append(fieldElement(key, value, hit.section));
-      });
-      if (simple.children.length) card.append(simple);
+      if (hit.section === "pharmacogenomics") {
+        appendPharmacogenomicsData(card, hit, query);
+      } else {
+        const simple = document.createElement("dl");
+        simple.className = "simple-fields";
+        (primaryFields[hit.section] || []).forEach(key => {
+          const value = hit[key];
+          if (value !== null && value !== undefined && value !== "") simple.append(fieldElement(key, value, hit.section));
+        });
+        if (simple.children.length) card.append(simple);
+      }
 
-      if (typeof hit.guideline_url === "string" && hit.guideline_url.startsWith("https://")) {
+      if (hit.section !== "pharmacogenomics" && typeof hit.guideline_url === "string" && hit.guideline_url.startsWith("https://")) {
         const source = document.createElement("a");
         source.className = "source-link";
         source.href = hit.guideline_url;
