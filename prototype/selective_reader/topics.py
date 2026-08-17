@@ -10,7 +10,7 @@ import duckdb
 
 
 TOPIC_INDEX_FILENAME = ".topic-index.json"
-TOPIC_INDEX_VERSION = 3
+TOPIC_INDEX_VERSION = 4
 
 TOPICS: Tuple[Dict[str, str], ...] = (
     # Medications are matched only against recorded pharmacogenomic drug links.
@@ -80,7 +80,7 @@ def _topic_details() -> Dict[str, Dict[str, Any]]:
         topic["id"]: {
             "pharmacogenomics": [],
             "polygenic_scores": [],
-            "research_association_count": 0,
+            "has_person_linked_variants": False,
         }
         for topic in TOPICS
     }
@@ -168,28 +168,36 @@ def _scan_traits(
                 }
             )
 
-    gwas_path = workspace / "gwas_associations.parquet"
-    if gwas_path.is_file():
+    variants_path = workspace / "variants.parquet"
+    if variants_path.is_dir():
         connection.execute(
-            "CREATE VIEW topic_gwas AS SELECT * FROM read_parquet('%s')"
-            % _sql_path(gwas_path)
+            "CREATE VIEW topic_variants AS SELECT * FROM read_parquet("
+            "'%s/**/*.parquet', hive_partitioning=true)" % _sql_path(variants_path)
         )
-        cursor = connection.execute(
-            """
-            WITH topics(topic_id, term) AS (VALUES %s)
-            SELECT topic_id, count(*) AS association_count
-            FROM topics, topic_gwas AS gwas
-            WHERE lower(gwas.trait) LIKE '%%' || lower(term) || '%%'
-               OR lower(COALESCE(gwas.mapped_trait, '')) LIKE '%%' || lower(term) || '%%'
-               OR lower(COALESCE(gwas.reported_trait, '')) LIKE '%%' || lower(term) || '%%'
-            GROUP BY topic_id
-            """ % values,
-            parameters,
-        )
-        for topic_id, association_count in cursor.fetchall():
-            key = str(topic_id)
-            matches[key].add("gwas")
-            details[key]["research_association_count"] = int(association_count)
+        try:
+            connection.execute(
+                "SELECT trait_associations.is_gwas_hit, "
+                "trait_associations.traits FROM topic_variants LIMIT 0"
+            )
+        except duckdb.Error:
+            pass
+        else:
+            cursor = connection.execute(
+                """
+                WITH topics(topic_id, term) AS (VALUES %s)
+                SELECT DISTINCT topics.topic_id
+                FROM topic_variants AS variants
+                CROSS JOIN UNNEST(variants.trait_associations.traits) AS annotation(value)
+                JOIN topics
+                  ON lower(annotation.value) LIKE '%%' || lower(topics.term) || '%%'
+                WHERE variants.trait_associations.is_gwas_hit
+                """ % values,
+                parameters,
+            )
+            for (topic_id,) in cursor.fetchall():
+                key = str(topic_id)
+                matches[key].add("trait_variants")
+                details[key]["has_person_linked_variants"] = True
 
 
 def _catalog_signature() -> str:
@@ -250,7 +258,7 @@ def topics_for_workspace(workspace_path: str) -> List[Dict[str, Any]]:
     section_order = {
         "pharmacogenomics": 0,
         "polygenic_scores": 1,
-        "gwas": 2,
+        "trait_variants": 2,
     }
     result = [
         {
@@ -262,10 +270,10 @@ def topics_for_workspace(workspace_path: str) -> List[Dict[str, Any]]:
             "personal": {
                 "pharmacogenomics": details[topic["id"]]["pharmacogenomics"],
                 "polygenic_scores": details[topic["id"]]["polygenic_scores"],
+                "has_person_linked_variants": details[topic["id"]][
+                    "has_person_linked_variants"
+                ],
             },
-            "research_association_count": details[topic["id"]][
-                "research_association_count"
-            ],
         }
         for topic in TOPICS
     ]

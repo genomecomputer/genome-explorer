@@ -169,7 +169,7 @@ PAGE = r'''<!doctype html>
     .topic-indicator { min-width: 0; text-align: right; }
     .topic-indicator-value { display: block; color: var(--accent-dark); font-size: 12px; font-weight: 780; }
     .topic-indicator-detail { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; line-height: 1.35; }
-    .topic-indicator.research .topic-indicator-value { color: #37566d; }
+    .topic-indicator.related .topic-indicator-value { color: #37566d; }
     .topic-indicator.no-data .topic-indicator-value { color: var(--muted); font-weight: 680; }
     .topic-browser {
       display: grid; grid-template-columns: 210px minmax(0, 1fr); overflow: hidden;
@@ -262,7 +262,7 @@ PAGE = r'''<!doctype html>
     .section-title { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; color: #35453e; font-size: 13px; font-weight: 790; letter-spacing: .06em; text-transform: uppercase; }
     .count { padding: 3px 7px; color: var(--accent-dark); background: var(--accent-soft); border-radius: 999px; font-size: 11px; }
     .cards { display: grid; gap: 11px; }
-    .section-variants .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .section-variants .cards, .section-trait_variants .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .result-disclosure {
       overflow: hidden; background: rgba(255,255,255,.75); border: 1px solid var(--line); border-radius: 14px;
     }
@@ -429,7 +429,7 @@ PAGE = r'''<!doctype html>
         </div>
         <div class="catalog-note">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-          <span>Highlighted values are person-specific PGx results or polygenic scores already recorded in this bundle. Research context only means the bundle includes general evidence but no person-specific score for this topic.</span>
+          <span>Highlighted values are person-specific PGx results or polygenic scores already recorded in this bundle. Related records found means person-specific variant records have existing annotations that mention the topic. It is not a score or risk interpretation.</span>
         </div>
         <div class="topic-catalog" id="topic-catalog"></div>
 
@@ -524,12 +524,14 @@ PAGE = r'''<!doctype html>
     const sectionLabels = {
       variants: "Your recorded variants", genes: "Records for this gene",
       pharmacogenomics: "Medication-related records", polygenic_scores: "Traits and scores",
+      trait_variants: "Related records in this genome",
       gwas: "Research associations"
     };
 
     const recordLabels = {
       variants: "Personal variant record", genes: "Personal gene summary",
       pharmacogenomics: "Bundle pharmacogenomic record", polygenic_scores: "Recorded score",
+      trait_variants: "Person-specific variant record",
       gwas: "Research association"
     };
 
@@ -538,6 +540,7 @@ PAGE = r'''<!doctype html>
       genes: ["variant_count", "actionable_count"],
       pharmacogenomics: [],
       polygenic_scores: ["percentile", "reference_population"],
+      trait_variants: ["called_alleles", "matched_traits", "gene", "call_confidence"],
       gwas: ["gene", "source"]
     };
 
@@ -550,12 +553,12 @@ PAGE = r'''<!doctype html>
       conditions: {
         label: "Conditions",
         icon: "+",
-        prompt: "Does this bundle record a score or research association mentioning this condition?"
+        prompt: "Does this bundle record a score or person-linked annotation mentioning this condition?"
       },
       traits: {
         label: "Traits",
         icon: "%",
-        prompt: "Does this bundle record a score or research association mentioning this trait?"
+        prompt: "Does this bundle record a score or person-linked annotation mentioning this trait?"
       }
     };
 
@@ -573,12 +576,12 @@ PAGE = r'''<!doctype html>
       conditions: {
         label: "Conditions",
         title: "Conditions",
-        description: "Common conditions with recorded polygenic scores when available."
+        description: "Common conditions with recorded scores or related personal records when available."
       },
       traits: {
         label: "Traits",
         title: "Traits",
-        description: "Everyday traits with recorded polygenic scores when available."
+        description: "Everyday traits with recorded scores or related personal records when available."
       }
     };
 
@@ -591,7 +594,7 @@ PAGE = r'''<!doctype html>
       const personal = topic.personal || {};
       const pgx = Array.isArray(personal.pharmacogenomics) ? personal.pharmacogenomics : [];
       const scores = Array.isArray(personal.polygenic_scores) ? personal.polygenic_scores : [];
-      const researchCount = Number(topic.research_association_count || 0);
+      const hasPersonLinkedVariants = Boolean(personal.has_person_linked_variants);
       const indicator = document.createElement("span");
       indicator.className = "topic-indicator";
       const value = document.createElement("span");
@@ -612,13 +615,13 @@ PAGE = r'''<!doctype html>
       } else if (scores.length > 1) {
         value.textContent = `${scores.length} recorded scores`;
         detail.textContent = "Person-specific values in this bundle";
-      } else if (researchCount > 0) {
-        indicator.classList.add("research");
-        value.textContent = "Research context only";
-        detail.textContent = "No person-specific score recorded";
+      } else if (hasPersonLinkedVariants) {
+        indicator.classList.add("related");
+        value.textContent = "Related records found";
+        detail.textContent = "Recorded annotations connect this genome to the topic";
       } else {
         indicator.classList.add("no-data");
-        value.textContent = "No personal topic data";
+        value.textContent = "No personal result recorded";
         detail.textContent = "This is not a negative result";
       }
       indicator.append(value, detail);
@@ -1022,6 +1025,7 @@ PAGE = r'''<!doctype html>
         return hit.gene_symbol;
       }
       if (hit.section === "variants") return hit.gene || hit.rsid || "Recorded variant";
+      if (hit.section === "trait_variants") return hit.rsid || hit.variant_id || hit.gene || "Recorded variant";
       if (hit.section === "genes") return hit.gene_symbol;
       return hit.trait || hit.rsid || "Recorded result";
     }
@@ -1033,20 +1037,25 @@ PAGE = r'''<!doctype html>
       }
       if (hit.section === "variants") return hit.rsid ? `Identifier: ${hit.rsid}` : "";
       if (hit.section === "genes") return "Personal variant records found";
+      if (hit.section === "trait_variants") return "Recorded in this genome";
       if (hit.section === "gwas") {
-        return "External population evidence recorded in the bundle";
+        return "Supporting research for a recorded personal variant";
       }
       return hit.rsid ? `Identifier: ${hit.rsid}` : "";
     }
 
-    function summaryFor(hit) {
+    function summaryFor(hit, query) {
       if (hit.section === "pharmacogenomics") {
         return `This bundle contains a person-specific pharmacogenomic result for ${hit.gene_symbol}.`;
       }
       if (hit.section === "polygenic_scores") return `The bundle contains a recorded score for ${hit.trait}.`;
+      if (hit.section === "trait_variants") {
+        const topic = Array.isArray(hit.matched_traits) && hit.matched_traits.length ? hit.matched_traits[0] : query;
+        return `This person-specific variant record has a bundle-recorded research annotation for ${topic}.`;
+      }
       if (hit.section === "gwas") {
         const identifier = hit.rsid || hit.variant_id || "this variant";
-        return `The bundle includes an external research association between ${identifier} and ${hit.trait}.`;
+        return `The bundle records an external research association between ${identifier} and ${hit.trait}. The same variant is present in the person-specific records above.`;
       }
       if (hit.section === "genes") {
         return `Your bundle contains ${formatValue(hit.variant_count)} personal variant records assigned to ${hit.gene_symbol}.`;
@@ -1060,14 +1069,22 @@ PAGE = r'''<!doctype html>
       if (hit.section === "genes") {
         return "This shows that the bundle has personal variant records for this gene. It is not a test of whether the gene itself is present or absent.";
       }
-      if (hit.section === "gwas" && hit.gene) {
-        return `${hit.gene} is named by the external research source. This association has not been presented as a match to this person's genome.`;
+      if (hit.section === "trait_variants") {
+        return "This confirms that the record belongs to this genome bundle. It does not say whether the variant increases or decreases the trait, and it is not a risk score.";
+      }
+      if (hit.section === "gwas") {
+        const geneContext = hit.gene ? ` ${hit.gene} is named by the research source.` : "";
+        return `This research record is linked by variant ID to a person-specific record above.${geneContext} It does not provide a person-specific interpretation.`;
       }
       return "";
     }
 
     function fieldLabelFor(section, key) {
       if (section === "gwas" && key === "gene") return "Gene named by research";
+      if (section === "trait_variants" && key === "called_alleles") return "Recorded genotype";
+      if (section === "trait_variants" && key === "matched_traits") return "Matching recorded topics";
+      if (section === "trait_variants" && key === "recorded_traits") return "Recorded topic labels";
+      if (section === "trait_variants" && key === "study_pmids") return "Recorded PubMed IDs";
       if (section === "variants" && key === "gene") return "Gene annotation";
       return fieldLabels[key] || key.replaceAll("_", " ");
     }
@@ -1085,6 +1102,8 @@ PAGE = r'''<!doctype html>
         link.rel = "noopener noreferrer";
         link.textContent = "Open recorded source";
         detail.append(link);
+      } else if (key === "called_alleles" && Array.isArray(value)) {
+        detail.textContent = value.join(" / ");
       } else {
         detail.textContent = formatValue(value);
       }
@@ -1162,7 +1181,7 @@ PAGE = r'''<!doctype html>
 
       const summary = document.createElement("p");
       summary.className = "recorded-summary";
-      summary.textContent = summaryFor(hit);
+      summary.textContent = summaryFor(hit, query);
       card.append(summary);
 
       const meaning = meaningFor(hit);
@@ -1210,15 +1229,18 @@ PAGE = r'''<!doctype html>
       return card;
     }
 
-    function sectionHeading(sectionName, count) {
+    function sectionHeading(sectionName, count, showCount = true) {
       const heading = document.createElement("div");
       heading.className = "section-title";
       const label = document.createElement("span");
       label.textContent = sectionLabels[sectionName] || sectionName;
-      const badge = document.createElement("span");
-      badge.className = "count";
-      badge.textContent = count;
-      heading.append(label, badge);
+      heading.append(label);
+      if (showCount) {
+        const badge = document.createElement("span");
+        badge.className = "count";
+        badge.textContent = count;
+        heading.append(badge);
+      }
       return heading;
     }
 
@@ -1232,43 +1254,55 @@ PAGE = r'''<!doctype html>
     function renderSearch(payload) {
       results.hidden = false;
       const count = payload.hits.length;
-      document.querySelector("#results-title").textContent = count ? "What the bundle records" : "Not covered";
-      document.querySelector("#result-meta").textContent = `${count} recorded ${count === 1 ? "match" : "matches"}`;
+      const matchingTopic = latestTopics.find(topic => topic.query.toLowerCase() === payload.query.toLowerCase());
+      const grouped = Object.groupBy(payload.hits, hit => hit.section);
+      const hasPersonLinkedRecords = Boolean(grouped.trait_variants?.length);
+      document.querySelector("#results-title").textContent = count
+        ? "What the bundle records"
+        : matchingTopic ? "No personal result recorded" : "Not covered";
+      document.querySelector("#result-meta").textContent = hasPersonLinkedRecords
+        ? "Person-specific records and supporting research"
+        : count ? `${count} recorded ${count === 1 ? "match" : "matches"}` : "";
       content.replaceChildren();
       if (!count) {
         const empty = document.createElement("div");
         empty.className = "empty";
-        empty.textContent = "This search is not covered by the bundle's recorded fields.";
+        empty.textContent = matchingTopic
+          ? "This bundle does not record a person-specific score or related variant annotation for this topic. This is not a negative result."
+          : "This search is not covered by the bundle's recorded fields.";
         content.append(empty);
         results.scrollIntoView({ behavior: "smooth", block: "start" });
         return;
       }
-      const grouped = Object.groupBy(payload.hits, hit => hit.section);
-      const sectionOrder = ["pharmacogenomics", "polygenic_scores", "genes", "variants", "gwas"];
+      const sectionOrder = ["pharmacogenomics", "polygenic_scores", "trait_variants", "genes", "variants", "gwas"];
       const hasClearerRecord = Boolean(
         grouped.pharmacogenomics?.length ||
-        grouped.polygenic_scores?.length
+        grouped.polygenic_scores?.length ||
+        grouped.trait_variants?.length
       );
       sectionOrder.filter(sectionName => grouped[sectionName]?.length).forEach(sectionName => {
         const hits = grouped[sectionName];
         const section = document.createElement("section");
         section.className = `section section-${sectionName}`;
         const isSecondary = hasClearerRecord && (sectionName === "variants" || sectionName === "gwas");
+        const showCount = !hasPersonLinkedRecords || (sectionName !== "trait_variants" && sectionName !== "gwas");
         if (isSecondary) {
           const disclosure = document.createElement("details");
           disclosure.className = "result-disclosure";
           const summary = document.createElement("summary");
-          summary.append(sectionHeading(sectionName, hits.length));
+          summary.append(sectionHeading(sectionName, hits.length, showCount));
           disclosure.append(summary, cardsFor(hits, payload.query));
           section.append(disclosure);
         } else {
           const visibleHits = hits.slice(0, sectionName === "pharmacogenomics" ? hits.length : 4);
-          section.append(sectionHeading(sectionName, hits.length), cardsFor(visibleHits, payload.query));
+          section.append(sectionHeading(sectionName, hits.length, showCount), cardsFor(visibleHits, payload.query));
           if (visibleHits.length < hits.length) {
             const more = document.createElement("details");
             more.className = "result-disclosure more-results";
             const summary = document.createElement("summary");
-            summary.textContent = `Show ${hits.length - visibleHits.length} more recorded matches`;
+            summary.textContent = hasPersonLinkedRecords && (sectionName === "trait_variants" || sectionName === "gwas")
+              ? "Show more related records"
+              : `Show ${hits.length - visibleHits.length} more recorded matches`;
             more.append(summary, cardsFor(hits.slice(visibleHits.length), payload.query));
             section.append(more);
           }

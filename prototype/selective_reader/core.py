@@ -458,6 +458,30 @@ def _variant_projection() -> str:
     """
 
 
+def _trait_variant_projection() -> str:
+    return """
+        variant_id,
+        rsid,
+        chrom,
+        pos,
+        ref,
+        alt,
+        list_transform(
+            genotype.gt,
+            allele_index -> CASE
+                WHEN allele_index = 0 THEN ref
+                WHEN allele_index = 1 THEN alt
+                ELSE '?'
+            END
+        ) AS called_alleles,
+        genotype.zygosity AS zygosity,
+        quality.call_confidence AS call_confidence,
+        gene.symbol AS gene,
+        trait_associations.traits AS recorded_traits,
+        trait_associations.study_pmids AS study_pmids
+    """
+
+
 def search_workspace(workspace_path: str, query: str) -> SearchResult:
     started = time.monotonic()
     workspace = Path(workspace_path).resolve()
@@ -470,6 +494,14 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
         "CREATE VIEW variants AS SELECT * FROM read_parquet("
         "'%s/**/*.parquet', hive_partitioning=true)" % _sql_path(variants)
     )
+    has_trait_associations = True
+    try:
+        connection.execute(
+            "SELECT trait_associations.is_gwas_hit, "
+            "trait_associations.traits FROM variants LIMIT 0"
+        )
+    except duckdb.Error:
+        has_trait_associations = False
 
     table_files = {
         "pharmacogenomics": workspace / "pharmacogenomics.parquet",
@@ -569,19 +601,70 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
             )
             hits.extend(_rows(cursor, "polygenic_scores"))
 
-        if "gwas_associations" in available:
+        if has_trait_associations:
             cursor = connection.execute(
                 """
-                SELECT variant_id, rsid, gene, chrom, pos, ref, alt, trait,
-                       effect_allele, effect_size, effect_type, p_value,
-                       source, pubmed_id, study_accession, catalog_version
-                FROM gwas_associations
-                WHERE lower(trait) LIKE '%' || lower(?) || '%'
-                   OR lower(COALESCE(mapped_trait, '')) LIKE '%' || lower(?) || '%'
-                   OR lower(COALESCE(reported_trait, '')) LIKE '%' || lower(?) || '%'
+                SELECT %s,
+                       list_slice(
+                           list_filter(
+                               trait_associations.traits,
+                               trait -> lower(trait) LIKE '%%' || lower(?) || '%%'
+                           ),
+                           1,
+                           3
+                       ) AS matched_traits
+                FROM variants
+                WHERE trait_associations.is_gwas_hit
+                  AND EXISTS (
+                      SELECT 1
+                      FROM UNNEST(trait_associations.traits) AS annotation(value)
+                      WHERE lower(value) LIKE '%%' || lower(?) || '%%'
+                  )
+                ORDER BY chrom, pos
+                LIMIT 25
+                """ % _trait_variant_projection(),
+                [normalized_query, normalized_query],
+            )
+            hits.extend(_rows(cursor, "trait_variants"))
+
+        if "gwas_associations" in available and has_trait_associations:
+            cursor = connection.execute(
+                """
+                WITH person_linked AS (
+                    SELECT DISTINCT variant_id, rsid
+                    FROM variants
+                    WHERE trait_associations.is_gwas_hit
+                      AND EXISTS (
+                          SELECT 1
+                          FROM UNNEST(trait_associations.traits) AS annotation(value)
+                          WHERE lower(value) LIKE '%' || lower(?) || '%'
+                      )
+                )
+                SELECT DISTINCT
+                       gwas.variant_id, gwas.rsid, gwas.gene, gwas.chrom,
+                       gwas.pos, gwas.ref, gwas.alt, gwas.trait,
+                       gwas.effect_allele, gwas.effect_size, gwas.effect_type,
+                       gwas.p_value, gwas.source, gwas.pubmed_id,
+                       gwas.study_accession, gwas.catalog_version
+                FROM gwas_associations AS gwas
+                JOIN person_linked
+                  ON gwas.variant_id = person_linked.variant_id
+                  OR (
+                      gwas.rsid IS NOT NULL
+                      AND gwas.rsid = person_linked.rsid
+                  )
+                WHERE lower(gwas.trait) LIKE '%' || lower(?) || '%'
+                   OR lower(COALESCE(gwas.mapped_trait, '')) LIKE '%' || lower(?) || '%'
+                   OR lower(COALESCE(gwas.reported_trait, '')) LIKE '%' || lower(?) || '%'
+                ORDER BY gwas.rsid, gwas.trait
                 LIMIT 25
                 """,
-                [normalized_query, normalized_query, normalized_query],
+                [
+                    normalized_query,
+                    normalized_query,
+                    normalized_query,
+                    normalized_query,
+                ],
             )
             hits.extend(_rows(cursor, "gwas"))
 

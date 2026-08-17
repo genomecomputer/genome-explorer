@@ -15,7 +15,21 @@ class TopicIndexTest(unittest.TestCase):
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.workspace = Path(self.temporary_directory.name)
+        variants = self.workspace / "variants.parquet" / "chrom=chr1"
+        variants.mkdir(parents=True)
         connection = duckdb.connect()
+        connection.execute(
+            """
+            COPY (
+                SELECT 'variant-1'::VARCHAR AS variant_id,
+                       struct_pack(
+                           is_gwas_hit := true,
+                           traits := ['cholesterol levels']::VARCHAR[]
+                       ) AS trait_associations
+            ) TO ? (FORMAT PARQUET)
+            """,
+            [str(variants / "part-0000.parquet")],
+        )
         connection.execute(
             """
             COPY (
@@ -38,22 +52,12 @@ class TopicIndexTest(unittest.TestCase):
             """,
             [str(self.workspace / "prs.parquet")],
         )
-        connection.execute(
-            """
-            COPY (
-                SELECT 'cholesterol levels'::VARCHAR AS trait,
-                       'lipid measurement'::VARCHAR AS mapped_trait,
-                       'cholesterol levels'::VARCHAR AS reported_trait
-            ) TO ? (FORMAT PARQUET)
-            """,
-            [str(self.workspace / "gwas_associations.parquet")],
-        )
         connection.close()
 
     def tearDown(self):
         self.temporary_directory.cleanup()
 
-    def test_topic_index_exposes_recorded_values_and_research_context(self):
+    def test_topic_index_exposes_recorded_values_and_person_linked_records(self):
         topics = topics_for_workspace(str(self.workspace))
         by_id = {topic["id"]: topic for topic in topics}
 
@@ -74,7 +78,8 @@ class TopicIndexTest(unittest.TestCase):
             cholesterol["personal"]["polygenic_scores"][0]["percentile"],
             81.5,
         )
-        self.assertEqual(cholesterol["research_association_count"], 1)
+        self.assertTrue(cholesterol["personal"]["has_person_linked_variants"])
+        self.assertIn("trait_variants", cholesterol["record_sections"])
 
         cache = json.loads((self.workspace / TOPIC_INDEX_FILENAME).read_text())
         self.assertEqual(cache["topics"], topics)

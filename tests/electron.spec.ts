@@ -71,19 +71,31 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(pcosTopic.locator(".topic-indicator-value")).toHaveText("85th percentile");
     await firstWindow.getByRole("tab", { name: /Traits/ }).click();
     const cholesterolTopic = firstWindow.getByRole("button", { name: "Search this bundle for Cholesterol levels" });
-    await expect(cholesterolTopic.locator(".topic-indicator-value")).toHaveText("Research context only");
-    await expect(cholesterolTopic.locator(".topic-indicator-detail")).toHaveText("No person-specific score recorded");
+    await expect(cholesterolTopic.locator(".topic-indicator-value")).toHaveText("Related records found");
+    await expect(cholesterolTopic.locator(".topic-indicator-detail")).toHaveText("Recorded annotations connect this genome to the topic");
     const lactoseTopic = firstWindow.getByRole("button", { name: "Search this bundle for Lactose intolerance" });
     await expect(lactoseTopic.locator(".topic-indicator")).toHaveClass(/no-data/);
+    await expect(lactoseTopic.locator(".topic-indicator-value")).toHaveText("No personal result recorded");
+    await lactoseTopic.click();
+    await expect(firstWindow.locator("#results-title")).toHaveText("No personal result recorded");
+    await expect(firstWindow.locator(".section-gwas")).toHaveCount(0);
     await cholesterolTopic.click();
+    await expect(firstWindow.getByText("Related records in this genome")).toBeVisible();
+    await expect(firstWindow.getByText("Recorded in this genome").first()).toBeVisible();
+    await expect(firstWindow.getByText("High density lipoprotein cholesterol levels").first()).toBeVisible();
+    await expect(firstWindow.getByText(/This confirms that the record belongs to this genome bundle/).first()).toBeVisible();
     await expect(firstWindow.getByText("Research associations")).toBeVisible();
-    await expect(firstWindow.locator(".section-trait_variant_summary")).toHaveCount(0);
+    await expect(firstWindow.getByText(/has not been presented as a match/)).toHaveCount(0);
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       await firstWindow.screenshot({
-        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "research-context-topic.png"),
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "person-linked-topic.png"),
         fullPage: true,
       });
     }
+    const supportingResearch = firstWindow.locator(".section-gwas");
+    await supportingResearch.locator(":scope > .result-disclosure > summary").click();
+    await expect(supportingResearch.getByText(/The same variant is present in the person-specific records above/).first()).toBeVisible();
+    await expect(supportingResearch.getByText(/It does not provide a person-specific interpretation/).first()).toBeVisible();
     await firstWindow.getByRole("tab", { name: /Medications/ }).click();
     await expect(firstWindow.locator(".directory-row")).toHaveCount(15);
 
