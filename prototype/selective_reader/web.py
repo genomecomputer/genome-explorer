@@ -187,6 +187,10 @@ PAGE = r'''<!doctype html>
     .card h3 { margin: 0; font-size: 20px; letter-spacing: -.025em; }
     .card-id { padding-top: 3px; color: var(--muted); font-size: 12px; }
     .recorded-summary { margin: 12px 0 0; color: #405048; font-size: 15px; line-height: 1.55; }
+    .meaning-note {
+      margin: 16px 0 0; padding: 12px 14px; color: #526159; background: var(--soft);
+      border-left: 3px solid #a9c9b8; border-radius: 0 10px 10px 0; font-size: 13px; line-height: 1.5;
+    }
     .simple-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 22px; margin: 20px 0 0; }
     .field dt { margin-bottom: 5px; color: var(--muted); font-size: 10px; font-weight: 760; letter-spacing: .07em; text-transform: uppercase; }
     .field dd { margin: 0; overflow-wrap: anywhere; font-size: 14px; line-height: 1.45; }
@@ -367,7 +371,7 @@ PAGE = r'''<!doctype html>
     const fieldLabels = {
       variant_id: "Variant identifier", rsid: "rsID", chrom: "Chromosome", pos: "Position",
       ref: "Reference allele", alt: "Alternate allele", genotype: "Genotype", zygosity: "Zygosity",
-      call_confidence: "Call confidence", gene: "Gene", gene_symbol: "Gene",
+      call_confidence: "Call confidence", gene: "Gene annotation", gene_symbol: "Gene",
       hgvsp: "Protein change", clinvar_significance: "ClinVar classification",
       clinvar_review_stars: "ClinVar review stars", clinvar_id: "ClinVar record",
       clinical_grade: "Clinical-grade flag", diplotype: "Diplotype", phenotype: "Recorded result",
@@ -383,19 +387,19 @@ PAGE = r'''<!doctype html>
     };
 
     const sectionLabels = {
-      variants: "Recorded variants", genes: "Gene records",
+      variants: "Your recorded variants", genes: "Records for this gene",
       pharmacogenomics: "Medication-related records", polygenic_scores: "Traits and scores",
       gwas: "Research associations"
     };
 
     const recordLabels = {
-      variants: "Variant record", genes: "Gene record",
+      variants: "Personal variant record", genes: "Personal gene summary",
       pharmacogenomics: "Medication-related record", polygenic_scores: "Recorded score",
       gwas: "Research association"
     };
 
     const primaryFields = {
-      variants: ["gene", "call_confidence"],
+      variants: ["zygosity", "call_confidence"],
       genes: ["variant_count", "actionable_count"],
       pharmacogenomics: ["phenotype", "cpic_level"],
       polygenic_scores: ["percentile", "reference_population"],
@@ -510,7 +514,11 @@ PAGE = r'''<!doctype html>
     function subtitleFor(hit) {
       if (hit.section === "pharmacogenomics") return `Related gene: ${hit.gene_symbol}`;
       if (hit.section === "variants") return hit.rsid ? `Identifier: ${hit.rsid}` : "";
-      if (hit.section === "genes") return "Gene recorded in this bundle";
+      if (hit.section === "genes") return "Personal variant records found";
+      if (hit.section === "gwas") {
+        const identifier = hit.rsid || hit.variant_id;
+        return identifier ? `Variant in your bundle: ${identifier}` : "";
+      }
       return hit.rsid ? `Identifier: ${hit.rsid}` : "";
     }
 
@@ -521,18 +529,39 @@ PAGE = r'''<!doctype html>
           : `The bundle contains a medication-related record for ${hit.gene_symbol}.`;
       }
       if (hit.section === "polygenic_scores") return `The bundle contains a recorded score for ${hit.trait}.`;
-      if (hit.section === "gwas") return `The bundle contains a recorded research association for ${hit.trait}.`;
-      if (hit.section === "genes") return `The bundle contains records for ${hit.gene_symbol}.`;
+      if (hit.section === "gwas") {
+        const identifier = hit.rsid || hit.variant_id || "this variant";
+        return `Your bundle records ${identifier}. The research source associates this variant with ${hit.trait}.`;
+      }
+      if (hit.section === "genes") {
+        return `Your bundle contains ${formatValue(hit.variant_count)} personal variant records assigned to ${hit.gene_symbol}.`;
+      }
       return hit.gene
-        ? `The bundle contains a recorded variant in ${hit.gene}.`
-        : "The bundle contains this recorded variant.";
+        ? `Your bundle contains a personal variant record annotated to ${hit.gene}.`
+        : "Your bundle contains this personal variant record.";
     }
 
-    function fieldElement(key, value) {
+    function meaningFor(hit) {
+      if (hit.section === "genes") {
+        return "This shows that the bundle has personal variant records for this gene. It is not a test of whether the gene itself is present or absent.";
+      }
+      if (hit.section === "gwas" && hit.gene) {
+        return `${hit.gene} is named by the research source. This is research context, not a result saying that you have or do not have that gene.`;
+      }
+      return "";
+    }
+
+    function fieldLabelFor(section, key) {
+      if (section === "gwas" && key === "gene") return "Gene named by research";
+      if (section === "variants" && key === "gene") return "Gene annotation";
+      return fieldLabels[key] || key.replaceAll("_", " ");
+    }
+
+    function fieldElement(key, value, section) {
       const wrapper = document.createElement("div");
       wrapper.className = "field";
       const label = document.createElement("dt");
-      label.textContent = fieldLabels[key] || key.replaceAll("_", " ");
+      label.textContent = fieldLabelFor(section, key);
       const detail = document.createElement("dd");
       if (typeof value === "string" && value.startsWith("https://")) {
         const link = document.createElement("a");
@@ -572,11 +601,19 @@ PAGE = r'''<!doctype html>
       summary.textContent = summaryFor(hit);
       card.append(summary);
 
+      const meaning = meaningFor(hit);
+      if (meaning) {
+        const note = document.createElement("p");
+        note.className = "meaning-note";
+        note.textContent = meaning;
+        card.append(note);
+      }
+
       const simple = document.createElement("dl");
       simple.className = "simple-fields";
       (primaryFields[hit.section] || []).forEach(key => {
         const value = hit[key];
-        if (value !== null && value !== undefined && value !== "") simple.append(fieldElement(key, value));
+        if (value !== null && value !== undefined && value !== "") simple.append(fieldElement(key, value, hit.section));
       });
       if (simple.children.length) card.append(simple);
 
@@ -598,7 +635,7 @@ PAGE = r'''<!doctype html>
       fields.className = "technical-fields";
       Object.entries(hit).forEach(([key, value]) => {
         if (key === "section" || value === null || value === undefined || value === "") return;
-        fields.append(fieldElement(key, value));
+        fields.append(fieldElement(key, value, hit.section));
       });
       technical.append(technicalSummary, fields);
       card.append(technical);
