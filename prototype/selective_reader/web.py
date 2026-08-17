@@ -157,18 +157,10 @@ PAGE = r'''<!doctype html>
     .topic-library { margin-top: 58px; }
     .topic-library h2, .results h2 { margin: 0; font-size: 25px; letter-spacing: -.03em; }
     .topic-library-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
-    .topic-library-intro { max-width: 660px; margin: 9px 0 0; color: var(--muted); line-height: 1.55; }
     .topic-summary { flex: 0 0 auto; padding-bottom: 3px; color: var(--muted); font-size: 13px; }
-    .catalog-note {
-      display: flex; align-items: flex-start; gap: 10px; margin-top: 19px; padding: 13px 15px;
-      color: #43544c; background: var(--blue-soft); border: 1px solid #d6e5ef; border-radius: 12px;
-      font-size: 13px; line-height: 1.5;
-    }
-    .catalog-note svg { flex: 0 0 auto; margin-top: 1px; }
     .topic-catalog { margin-top: 20px; }
     .topic-indicator { min-width: 0; text-align: right; }
     .topic-indicator-value { display: block; color: var(--accent-dark); font-size: 12px; font-weight: 780; }
-    .topic-indicator-detail { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; line-height: 1.35; }
     .topic-indicator.related .topic-indicator-value { color: #37566d; }
     .topic-indicator.no-data .topic-indicator-value { color: var(--muted); font-weight: 680; }
     .topic-browser {
@@ -197,7 +189,6 @@ PAGE = r'''<!doctype html>
     .directory-main { min-width: 0; padding: 20px; }
     .directory-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, 260px); align-items: end; gap: 18px; margin-bottom: 20px; }
     .directory-title { margin: 0; font-size: 19px; letter-spacing: -.025em; }
-    .directory-description { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
     input.directory-filter {
       min-height: 43px; padding: 10px 13px; color: var(--ink); background: white; border: 1px solid var(--line);
       border-radius: 11px; outline: none;
@@ -412,7 +403,7 @@ PAGE = r'''<!doctype html>
     <main id="explorer" hidden>
       <p class="eyebrow">Exploring <span id="active-bundle-name">your genome bundle</span></p>
       <h1>What would you like to explore?</h1>
-      <p class="lede">Search a medication, trait, condition, or gene. Genome Explorer only shows information already recorded in this bundle.</p>
+      <p class="lede">Search this bundle by topic, medication, gene, or variant.</p>
 
       <div class="search-panel">
         <form id="search-form">
@@ -422,15 +413,8 @@ PAGE = r'''<!doctype html>
       </div>
       <section class="topic-library" aria-labelledby="topic-library-title">
         <div class="topic-library-head">
-          <div>
-            <h2 id="topic-library-title">Browse common topics</h2>
-            <p class="topic-library-intro">Start with a medication, condition, or everyday trait people often look for.</p>
-          </div>
+          <h2 id="topic-library-title">Browse common topics</h2>
           <div class="topic-summary" id="topic-summary"></div>
-        </div>
-        <div class="catalog-note">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-          <span>Highlighted values are person-specific PGx results or polygenic scores already recorded in this bundle. Related records found means person-specific variant records have existing annotations that mention the topic. It is not a score or risk interpretation.</span>
         </div>
         <div class="topic-catalog" id="topic-catalog"></div>
 
@@ -469,7 +453,7 @@ PAGE = r'''<!doctype html>
         </div>
         <div class="notice">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-          <span>These are records from the bundle, not a diagnosis or treatment recommendation.</span>
+          <span>Bundle records only. Not a diagnosis.</span>
         </div>
         <div id="result-content"></div>
       </section>
@@ -525,15 +509,15 @@ PAGE = r'''<!doctype html>
     const sectionLabels = {
       variants: "Your recorded variants", genes: "Records for this gene",
       pharmacogenomics: "Medication-related records", polygenic_scores: "Traits and scores",
-      trait_variants: "Related records in this genome",
-      gwas: "Research associations"
+      trait_variants: "Related variants",
+      gwas: "Research sources"
     };
 
     const recordLabels = {
       variants: "Personal variant record", genes: "Personal gene summary",
       pharmacogenomics: "Bundle pharmacogenomic record", polygenic_scores: "Recorded score",
-      trait_variants: "Person-specific variant record",
-      gwas: "Research association"
+      trait_variants: "",
+      gwas: ""
     };
 
     const primaryFields = {
@@ -542,7 +526,7 @@ PAGE = r'''<!doctype html>
       pharmacogenomics: [],
       polygenic_scores: ["percentile", "reference_population"],
       trait_variants: ["called_alleles", "matched_traits", "gene", "call_confidence", "study_pmids"],
-      gwas: ["gene", "source", "pubmed_id", "study_accession"]
+      gwas: ["rsid", "gene", "source", "pubmed_id", "study_accession"]
     };
 
     const topicKinds = {
@@ -566,23 +550,19 @@ PAGE = r'''<!doctype html>
     const directoryViews = {
       personal: {
         label: "Results in this bundle",
-        title: "Person-specific results",
-        description: "Personal PGx results and recorded scores. Research-only matches are not included here."
+        title: "Person-specific results"
       },
       medications: {
         label: "Medications",
-        title: "Medications",
-        description: "Common medications, grouped by use. Rows show the phenotype and gene recorded in this bundle."
+        title: "Medications"
       },
       conditions: {
         label: "Conditions",
-        title: "Conditions",
-        description: "Common conditions with recorded scores or related personal records when available."
+        title: "Conditions"
       },
       traits: {
         label: "Traits",
-        title: "Traits",
-        description: "Everyday traits with recorded scores or related personal records when available."
+        title: "Traits"
       }
     };
 
@@ -600,32 +580,25 @@ PAGE = r'''<!doctype html>
       indicator.className = "topic-indicator";
       const value = document.createElement("span");
       value.className = "topic-indicator-value";
-      const detail = document.createElement("span");
-      detail.className = "topic-indicator-detail";
 
       if (pgx.length === 1) {
-        value.textContent = pgx[0].phenotype || pgx[0].diplotype || "Recorded PGx result";
-        detail.textContent = `Recorded PGx · ${pgx[0].gene_symbol}`;
+        const result = pgx[0].phenotype || pgx[0].diplotype || "PGx result";
+        value.textContent = `${result} · ${pgx[0].gene_symbol}`;
       } else if (pgx.length > 1) {
-        value.textContent = `${pgx.length} recorded PGx results`;
-        detail.textContent = pgx.map(record => record.gene_symbol).join(", ");
+        value.textContent = `${pgx.length} PGx results`;
       } else if (scores.length === 1) {
         const percentile = Number(scores[0].percentile).toLocaleString(undefined, { maximumFractionDigits: 1 });
         value.textContent = `${percentile}th percentile`;
-        detail.textContent = "Recorded polygenic score";
       } else if (scores.length > 1) {
-        value.textContent = `${scores.length} recorded scores`;
-        detail.textContent = "Person-specific values in this bundle";
+        value.textContent = `${scores.length} scores`;
       } else if (hasPersonLinkedVariants) {
         indicator.classList.add("related");
-        value.textContent = "Related records found";
-        detail.textContent = "Recorded annotations connect this genome to the topic";
+        value.textContent = "Related variants";
       } else {
         indicator.classList.add("no-data");
-        value.textContent = "No personal result recorded";
-        detail.textContent = "This is not a negative result";
+        value.textContent = "No personal result";
       }
-      indicator.append(value, detail);
+      indicator.append(value);
       return indicator;
     }
 
@@ -635,6 +608,10 @@ PAGE = r'''<!doctype html>
       row.type = "button";
       row.dataset.topicQuery = topic.query;
       row.setAttribute("aria-label", `Search this bundle for ${topic.label}`);
+      row.addEventListener("click", () => {
+        input.value = topic.query;
+        search(topic.query);
+      });
       const name = document.createElement("span");
       name.className = "directory-name";
       name.textContent = topic.label;
@@ -716,9 +693,7 @@ PAGE = r'''<!doctype html>
       const toolbarCopy = document.createElement("div");
       const title = document.createElement("h3");
       title.className = "directory-title";
-      const description = document.createElement("p");
-      description.className = "directory-description";
-      toolbarCopy.append(title, description);
+      toolbarCopy.append(title);
       const filter = document.createElement("input");
       filter.className = "directory-filter";
       filter.type = "search";
@@ -729,7 +704,6 @@ PAGE = r'''<!doctype html>
       const refresh = () => {
         const view = directoryViews[viewValue];
         title.textContent = view.title;
-        description.textContent = view.description;
         filter.placeholder = viewValue === "personal" ? "Filter results" : `Filter ${view.label.toLowerCase()}`;
         navList.querySelectorAll(".directory-nav-button").forEach(control => {
           control.setAttribute("aria-selected", String(control.dataset.directoryView === viewValue));
@@ -1038,10 +1012,6 @@ PAGE = r'''<!doctype html>
       }
       if (hit.section === "variants") return hit.rsid ? `Identifier: ${hit.rsid}` : "";
       if (hit.section === "genes") return "Personal variant records found";
-      if (hit.section === "trait_variants") return "Recorded in this genome";
-      if (hit.section === "gwas") {
-        return "Supporting research for a recorded personal variant";
-      }
       return hit.rsid ? `Identifier: ${hit.rsid}` : "";
     }
 
@@ -1050,14 +1020,6 @@ PAGE = r'''<!doctype html>
         return `This bundle contains a person-specific pharmacogenomic result for ${hit.gene_symbol}.`;
       }
       if (hit.section === "polygenic_scores") return `The bundle contains a recorded score for ${hit.trait}.`;
-      if (hit.section === "trait_variants") {
-        const topic = Array.isArray(hit.matched_traits) && hit.matched_traits.length ? hit.matched_traits[0] : query;
-        return `This genome contains this variant. The bundle links it to a recorded research topic: ${topic}.`;
-      }
-      if (hit.section === "gwas") {
-        const identifier = hit.rsid || hit.variant_id || "this variant";
-        return `The bundle records an external research association between ${identifier} and ${hit.trait}. The same variant is present in the person-specific records above.`;
-      }
       if (hit.section === "genes") {
         return `Your bundle contains ${formatValue(hit.variant_count)} personal variant records assigned to ${hit.gene_symbol}.`;
       }
@@ -1069,13 +1031,6 @@ PAGE = r'''<!doctype html>
     function meaningFor(hit) {
       if (hit.section === "genes") {
         return "This shows that the bundle has personal variant records for this gene. It is not a test of whether the gene itself is present or absent.";
-      }
-      if (hit.section === "trait_variants") {
-        return "The research reference is not a diagnosis or risk estimate. The bundle does not record whether this person's genotype increases or decreases the trait.";
-      }
-      if (hit.section === "gwas") {
-        const geneContext = hit.gene ? ` ${hit.gene} is named by the research source.` : "";
-        return `This research record is linked by variant ID to a person-specific record above.${geneContext} It does not provide a person-specific interpretation.`;
       }
       return "";
     }
@@ -1188,11 +1143,14 @@ PAGE = r'''<!doctype html>
     function cardFor(hit, query) {
       const card = document.createElement("article");
       card.className = "card";
+      const compact = hit.section === "trait_variants" || hit.section === "gwas";
 
-      const type = document.createElement("div");
-      type.className = "record-type";
-      type.textContent = recordLabels[hit.section] || "Bundle record";
-      card.append(type);
+      if (!compact) {
+        const type = document.createElement("div");
+        type.className = "record-type";
+        type.textContent = recordLabels[hit.section] || "Bundle record";
+        card.append(type);
+      }
 
       const top = document.createElement("div");
       top.className = "card-top";
@@ -1201,20 +1159,23 @@ PAGE = r'''<!doctype html>
       const subtitle = document.createElement("div");
       subtitle.className = "card-id";
       subtitle.textContent = subtitleFor(hit, query);
-      top.append(title, subtitle);
+      top.append(title);
+      if (!compact && subtitle.textContent) top.append(subtitle);
       card.append(top);
 
-      const summary = document.createElement("p");
-      summary.className = "recorded-summary";
-      summary.textContent = summaryFor(hit, query);
-      card.append(summary);
+      if (!compact) {
+        const summary = document.createElement("p");
+        summary.className = "recorded-summary";
+        summary.textContent = summaryFor(hit, query);
+        card.append(summary);
 
-      const meaning = meaningFor(hit);
-      if (meaning) {
-        const note = document.createElement("p");
-        note.className = "meaning-note";
-        note.textContent = meaning;
-        card.append(note);
+        const meaning = meaningFor(hit);
+        if (meaning) {
+          const note = document.createElement("p");
+          note.className = "meaning-note";
+          note.textContent = meaning;
+          card.append(note);
+        }
       }
 
       if (hit.section === "pharmacogenomics") {
@@ -1288,14 +1249,14 @@ PAGE = r'''<!doctype html>
         ? "What the bundle records"
         : matchingTopic ? "No personal result recorded" : "Not covered";
       document.querySelector("#result-meta").textContent = hasPersonLinkedRecords
-        ? "Person-specific records and supporting research"
+        ? ""
         : count ? `${count} recorded ${count === 1 ? "match" : "matches"}` : "";
       content.replaceChildren();
       if (!count) {
         const empty = document.createElement("div");
         empty.className = "empty";
         empty.textContent = matchingTopic
-          ? "This bundle does not record a person-specific score or related variant annotation for this topic. This is not a negative result."
+          ? "No score or related variant is recorded for this topic."
           : "This search is not covered by the bundle's recorded fields.";
         content.append(empty);
         results.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1342,6 +1303,11 @@ PAGE = r'''<!doctype html>
     async function search(query) {
       button.disabled = true;
       button.innerHTML = '<span class="spinner"></span>Searching';
+      results.hidden = false;
+      document.querySelector("#results-title").textContent = "Searching";
+      document.querySelector("#result-meta").textContent = "";
+      content.innerHTML = '<div class="empty">Searching this bundle...</div>';
+      results.scrollIntoView({ behavior: "smooth", block: "start" });
       try {
         const response = await fetch(`${basePath}/api/search`, {
           method: "POST",
@@ -1374,13 +1340,6 @@ PAGE = r'''<!doctype html>
         input.value = example.dataset.query || example.textContent;
         search(input.value);
       });
-    });
-
-    topicCatalog.addEventListener("click", event => {
-      const trigger = event.target.closest("[data-topic-query]");
-      if (!trigger) return;
-      input.value = trigger.dataset.topicQuery;
-      search(input.value);
     });
 
     chooseButton.addEventListener("click", async () => {

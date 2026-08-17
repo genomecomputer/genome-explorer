@@ -71,25 +71,27 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(pcosTopic.locator(".topic-indicator-value")).toHaveText("85th percentile");
     await firstWindow.getByRole("tab", { name: /Traits/ }).click();
     const cholesterolTopic = firstWindow.getByRole("button", { name: "Search this bundle for Cholesterol levels" });
-    await expect(cholesterolTopic.locator(".topic-indicator-value")).toHaveText("Related records found");
-    await expect(cholesterolTopic.locator(".topic-indicator-detail")).toHaveText("Recorded annotations connect this genome to the topic");
+    await expect(cholesterolTopic.locator(".topic-indicator-value")).toHaveText("Related variants");
     const lactoseTopic = firstWindow.getByRole("button", { name: "Search this bundle for Lactose intolerance" });
     await expect(lactoseTopic.locator(".topic-indicator")).toHaveClass(/no-data/);
-    await expect(lactoseTopic.locator(".topic-indicator-value")).toHaveText("No personal result recorded");
+    await expect(lactoseTopic.locator(".topic-indicator-value")).toHaveText("No personal result");
     await lactoseTopic.click();
     await expect(firstWindow.locator("#results-title")).toHaveText("No personal result recorded");
     await expect(firstWindow.locator(".section-gwas")).toHaveCount(0);
-    await cholesterolTopic.click();
-    await expect(firstWindow.getByText("Related records in this genome")).toBeVisible();
-    await expect(firstWindow.getByText("Recorded in this genome").first()).toBeVisible();
+    const cholesterolBounds = await cholesterolTopic.boundingBox();
+    expect(cholesterolBounds).not.toBeNull();
+    if (!cholesterolBounds) throw new Error("Cholesterol topic row has no bounding box.");
+    await firstWindow.mouse.click(cholesterolBounds.x + 6, cholesterolBounds.y + cholesterolBounds.height / 2);
+    await expect(firstWindow.getByText("Related variants", { exact: true }).last()).toBeVisible();
     await expect(firstWindow.getByText("High density lipoprotein cholesterol levels").first()).toBeVisible();
-    await expect(firstWindow.getByText(/The research reference is not a diagnosis or risk estimate/).first()).toBeVisible();
     const firstPersonalRecord = firstWindow.locator(".section-trait_variants .card").first();
+    await expect(firstPersonalRecord.locator(".record-type, .recorded-summary, .meaning-note")).toHaveCount(0);
+    await expect(firstPersonalRecord.getByText("G / C")).toBeVisible();
     await expect(firstPersonalRecord.getByRole("link", { name: "PubMed 34887591" })).toHaveAttribute(
       "href",
       "https://pubmed.ncbi.nlm.nih.gov/34887591/",
     );
-    await expect(firstWindow.getByText("Research associations")).toBeVisible();
+    await expect(firstWindow.getByText("Research sources")).toBeVisible();
     await expect(firstWindow.getByText(/has not been presented as a match/)).toHaveCount(0);
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       await firstWindow.screenshot({
@@ -99,8 +101,11 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     }
     const supportingResearch = firstWindow.locator(".section-gwas");
     await supportingResearch.locator(":scope > .result-disclosure > summary").click();
-    await expect(supportingResearch.getByText(/The same variant is present in the person-specific records above/).first()).toBeVisible();
-    await expect(supportingResearch.getByText(/It does not provide a person-specific interpretation/).first()).toBeVisible();
+    await expect(supportingResearch.getByText("GWAS Catalog").first()).toBeVisible();
+    await expect(supportingResearch.getByRole("link", { name: /PubMed/ }).first()).toHaveAttribute(
+      "href",
+      /pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/,
+    );
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       await firstWindow.screenshot({
         path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "supporting-research.png"),
