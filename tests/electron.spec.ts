@@ -5,6 +5,7 @@ import path from "node:path";
 
 const repositoryRoot = path.resolve(__dirname, "..");
 const sampleBundle = process.env.GENOME_EXPLORER_TEST_BUNDLE;
+const clinicalBundle = process.env.GENOME_EXPLORER_CLINICAL_TEST_BUNDLE;
 
 function processIsAlive(pid: number): boolean {
   try {
@@ -146,6 +147,65 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
   } finally {
     if (secondApp) await secondApp.close().catch(() => undefined);
     if (firstApp) await firstApp.close().catch(() => undefined);
+    rmSync(userData, { recursive: true, force: true });
+  }
+});
+
+test("shows clinical-grade findings with person calls and ClinVar evidence", async () => {
+  test.skip(!clinicalBundle || !existsSync(clinicalBundle), "Set GENOME_EXPLORER_CLINICAL_TEST_BUNDLE to a synthetic v1.1 bundle.");
+
+  const userData = mkdtempSync(path.join(os.tmpdir(), "genome-explorer-clinical-"));
+  const pidFile = path.join(userData, "engine.pid");
+  const environment = {
+    ...process.env,
+    GENOME_EXPLORER_TEST_BUNDLE: clinicalBundle,
+    GENOME_EXPLORER_TEST_PID_FILE: pidFile,
+    GENOME_EXPLORER_USER_DATA: userData,
+  };
+  const executablePath = process.env.GENOME_EXPLORER_EXECUTABLE;
+  const launchOptions = executablePath
+    ? { executablePath, args: [] as string[], cwd: repositoryRoot, env: environment }
+    : { args: [repositoryRoot], cwd: repositoryRoot, env: environment };
+
+  let app: Awaited<ReturnType<typeof electron.launch>> | undefined;
+  try {
+    app = await electron.launch(launchOptions);
+    const window = await app.firstWindow();
+    await window.getByRole("button", { name: "Add genome bundle" }).click();
+    await expect(window.locator("#explorer")).toBeVisible({ timeout: 30_000 });
+
+    const clinicalRow = window.getByRole("button", { name: "Search this bundle for Clinical findings" });
+    await expect(clinicalRow.locator(".topic-indicator-value")).toHaveText("2 clinical findings");
+    await clinicalRow.click();
+
+    const section = window.locator(".section-clinical_findings");
+    await expect(section.getByText("Clinical findings", { exact: true })).toBeVisible();
+    const firstFinding = section.locator(".card").first();
+    await expect(firstFinding.getByRole("heading", { name: "Dihydropyrimidine dehydrogenase deficiency" })).toBeVisible();
+    await expect(firstFinding.locator(":scope > .simple-fields").getByText("Likely pathogenic", { exact: true })).toBeVisible();
+    await expect(firstFinding.locator(":scope > .simple-fields").getByText("A / T", { exact: true })).toBeVisible();
+    await expect(firstFinding.locator(":scope > .simple-fields").getByText("high", { exact: true })).toBeVisible();
+    await expect(firstFinding.locator(":scope > .simple-fields").getByText("reviewed by expert panel", { exact: true })).toBeVisible();
+    await expect(firstFinding.getByRole("link", { name: "ClinVar VCV000307730" })).toHaveAttribute(
+      "href",
+      "https://www.ncbi.nlm.nih.gov/clinvar/?term=VCV000307730",
+    );
+    await expect(section.getByText(/Conflicting ClinVar submissions/)).toBeVisible();
+
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      mkdirSync(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, { recursive: true });
+      await window.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "clinical-findings.png"),
+        fullPage: true,
+      });
+    }
+
+    const enginePid = Number.parseInt(readFileSync(pidFile, "utf8"), 10);
+    await app.close();
+    app = undefined;
+    await waitForProcessExit(enginePid);
+  } finally {
+    if (app) await app.close().catch(() => undefined);
     rmSync(userData, { recursive: true, force: true });
   }
 });

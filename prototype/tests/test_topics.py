@@ -52,6 +52,25 @@ class TopicIndexTest(unittest.TestCase):
             """,
             [str(self.workspace / "prs.parquet")],
         )
+        connection.execute(
+            """
+            COPY (
+                SELECT 'finding-1'::VARCHAR AS finding_id,
+                       'variant-1'::VARCHAR AS variant_id,
+                       'BRCA1'::VARCHAR AS gene_symbol,
+                       'Breast cancer'::VARCHAR AS condition,
+                       'variant_classification'::VARCHAR AS claim_type,
+                       'Likely_pathogenic'::VARCHAR AS classification,
+                       true AS clinical_grade,
+                       ['evidence-1']::VARCHAR[] AS evidence_ids
+                UNION ALL
+                SELECT 'finding-2', 'variant-2', 'GENE2', 'Asthma',
+                       'variant_classification', 'Uncertain_significance',
+                       false, ['evidence-2']::VARCHAR[]
+            ) TO ? (FORMAT PARQUET)
+            """,
+            [str(self.workspace / "clinical_findings.parquet")],
+        )
         connection.close()
 
     def tearDown(self):
@@ -80,6 +99,26 @@ class TopicIndexTest(unittest.TestCase):
         )
         self.assertTrue(cholesterol["personal"]["has_person_linked_variants"])
         self.assertIn("trait_variants", cholesterol["record_sections"])
+
+        breast_cancer = by_id["breast-cancer"]
+        self.assertEqual(
+            breast_cancer["personal"]["clinical_findings"],
+            [
+                {
+                    "finding_id": "finding-1",
+                    "condition": "Breast cancer",
+                    "claim_type": "variant_classification",
+                    "classification": "Likely_pathogenic",
+                    "gene_symbol": "BRCA1",
+                }
+            ],
+        )
+        self.assertIn("clinical_findings", breast_cancer["record_sections"])
+        self.assertEqual(
+            by_id["clinical-findings"]["personal"]["clinical_findings"],
+            breast_cancer["personal"]["clinical_findings"],
+        )
+        self.assertNotIn("clinical_findings", by_id["asthma"]["record_sections"])
 
         cache = json.loads((self.workspace / TOPIC_INDEX_FILENAME).read_text())
         self.assertEqual(cache["topics"], topics)

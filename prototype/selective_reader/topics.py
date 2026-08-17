@@ -10,7 +10,7 @@ import duckdb
 
 
 TOPIC_INDEX_FILENAME = ".topic-index.json"
-TOPIC_INDEX_VERSION = 4
+TOPIC_INDEX_VERSION = 5
 
 TOPICS: Tuple[Dict[str, str], ...] = (
     # Medications are matched only against recorded pharmacogenomic drug links.
@@ -78,12 +78,79 @@ def _topic_values(topics: Sequence[Dict[str, str]]) -> Tuple[str, List[str]]:
 def _topic_details() -> Dict[str, Dict[str, Any]]:
     return {
         topic["id"]: {
+            "clinical_findings": [],
             "pharmacogenomics": [],
             "polygenic_scores": [],
             "has_person_linked_variants": False,
         }
         for topic in TOPICS
     }
+
+
+def _scan_clinical_findings(
+    connection: Any,
+    workspace: Path,
+    topics: Sequence[Dict[str, str]],
+    matches: DefaultDict[str, Set[str]],
+    details: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    path = workspace / "clinical_findings.parquet"
+    if not path.is_file():
+        return []
+    connection.execute(
+        "CREATE VIEW topic_clinical_findings AS SELECT * FROM read_parquet('%s')"
+        % _sql_path(path)
+    )
+    findings = [
+        {
+            "finding_id": finding_id,
+            "condition": condition,
+            "claim_type": claim_type,
+            "classification": classification,
+            "gene_symbol": gene_symbol,
+        }
+        for finding_id, condition, claim_type, classification, gene_symbol in connection.execute(
+            """
+            SELECT finding_id, condition, claim_type, classification, gene_symbol
+            FROM topic_clinical_findings
+            WHERE clinical_grade = true
+            ORDER BY condition, finding_id
+            """
+        ).fetchall()
+    ]
+    if not findings:
+        return []
+
+    values, parameters = _topic_values(topics)
+    cursor = connection.execute(
+        """
+        WITH topics(topic_id, term) AS (VALUES %s)
+        SELECT DISTINCT topics.topic_id,
+                        findings.finding_id,
+                        findings.condition,
+                        findings.claim_type,
+                        findings.classification,
+                        findings.gene_symbol
+        FROM topics, topic_clinical_findings AS findings
+        WHERE findings.clinical_grade = true
+          AND lower(findings.condition) LIKE '%%' || lower(topics.term) || '%%'
+        ORDER BY findings.condition, findings.finding_id
+        """ % values,
+        parameters,
+    )
+    for topic_id, finding_id, condition, claim_type, classification, gene_symbol in cursor.fetchall():
+        key = str(topic_id)
+        matches[key].add("clinical_findings")
+        details[key]["clinical_findings"].append(
+            {
+                "finding_id": finding_id,
+                "condition": condition,
+                "claim_type": claim_type,
+                "classification": classification,
+                "gene_symbol": gene_symbol,
+            }
+        )
+    return findings
 
 
 def _scan_medications(
@@ -182,18 +249,24 @@ def _scan_traits(
         except duckdb.Error:
             pass
         else:
-            cursor = connection.execute(
-                """
-                WITH topics(topic_id, term) AS (VALUES %s)
-                SELECT DISTINCT topics.topic_id
-                FROM topic_variants AS variants
-                CROSS JOIN UNNEST(variants.trait_associations.traits) AS annotation(value)
-                JOIN topics
-                  ON lower(annotation.value) LIKE '%%' || lower(topics.term) || '%%'
-                WHERE variants.trait_associations.is_gwas_hit
-                """ % values,
-                parameters,
-            )
+            cursor = None
+            try:
+                cursor = connection.execute(
+                    """
+                    WITH topics(topic_id, term) AS (VALUES %s)
+                    SELECT DISTINCT topics.topic_id
+                    FROM topic_variants AS variants
+                    CROSS JOIN UNNEST(variants.trait_associations.traits) AS annotation(value)
+                    JOIN topics
+                      ON lower(annotation.value) LIKE '%%' || lower(topics.term) || '%%'
+                    WHERE variants.trait_associations.is_gwas_hit
+                    """ % values,
+                    parameters,
+                )
+            except duckdb.Error:
+                pass
+            if cursor is None:
+                return
             for (topic_id,) in cursor.fetchall():
                 key = str(topic_id)
                 matches[key].add("trait_variants")
@@ -247,18 +320,23 @@ def topics_for_workspace(workspace_path: str) -> List[Dict[str, Any]]:
     traits = [topic for topic in TOPICS if topic["kind"] != "medications"]
 
     connection = duckdb.connect()
+    clinical_findings: List[Dict[str, Any]] = []
     try:
         connection.execute("SET threads = 2")
         connection.execute("SET enable_progress_bar = false")
+        clinical_findings = _scan_clinical_findings(
+            connection, workspace, traits, matches, details
+        )
         _scan_medications(connection, workspace, medications, matches, details)
         _scan_traits(connection, workspace, traits, matches, details)
     finally:
         connection.close()
 
     section_order = {
-        "pharmacogenomics": 0,
-        "polygenic_scores": 1,
-        "trait_variants": 2,
+        "clinical_findings": 0,
+        "pharmacogenomics": 1,
+        "polygenic_scores": 2,
+        "trait_variants": 3,
     }
     result = [
         {
@@ -268,6 +346,7 @@ def topics_for_workspace(workspace_path: str) -> List[Dict[str, Any]]:
                 matches[topic["id"]], key=lambda section: section_order[section]
             ),
             "personal": {
+                "clinical_findings": details[topic["id"]]["clinical_findings"],
                 "pharmacogenomics": details[topic["id"]]["pharmacogenomics"],
                 "polygenic_scores": details[topic["id"]]["polygenic_scores"],
                 "has_person_linked_variants": details[topic["id"]][
@@ -277,5 +356,24 @@ def topics_for_workspace(workspace_path: str) -> List[Dict[str, Any]]:
         }
         for topic in TOPICS
     ]
+    if clinical_findings:
+        result.insert(
+            0,
+            {
+                "id": "clinical-findings",
+                "kind": "clinical",
+                "label": "Clinical findings",
+                "query": "clinical findings",
+                "group": "Clinical",
+                "recorded": True,
+                "record_sections": ["clinical_findings"],
+                "personal": {
+                    "clinical_findings": clinical_findings,
+                    "pharmacogenomics": [],
+                    "polygenic_scores": [],
+                    "has_person_linked_variants": False,
+                },
+            },
+        )
     _store_topic_index(workspace, result)
     return result

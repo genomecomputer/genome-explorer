@@ -14,7 +14,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import duckdb
 
-SUPPORTED_SCHEMA_VERSIONS = {"1.0.0"}
+SUPPORTED_SCHEMA_VERSIONS = {"1.0.0", "1.1.0"}
 CHUNK_SIZE = 1024 * 1024
 MAX_MANIFEST_BYTES = 5 * 1024 * 1024
 RECEIPT_FILENAME = ".validation-receipt.json"
@@ -452,7 +452,10 @@ def _variant_projection() -> str:
         gene.symbol AS gene,
         consequence.hgvsp AS hgvsp,
         pathogenicity.clinvar_significance AS clinvar_significance,
+        pathogenicity.clinvar_has_conflicts AS clinvar_has_conflicts,
+        pathogenicity.clinvar_conflict_summary AS clinvar_conflict_summary,
         pathogenicity.clinvar_review_stars AS clinvar_review_stars,
+        pathogenicity.clinvar_submitters_count AS clinvar_submitters_count,
         pathogenicity.clinvar_id AS clinvar_id,
         clinical_grade
     """
@@ -504,6 +507,8 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
         has_trait_associations = False
 
     table_files = {
+        "clinical_findings": workspace / "clinical_findings.parquet",
+        "clinical_evidence": workspace / "clinical_evidence.parquet",
         "pharmacogenomics": workspace / "pharmacogenomics.parquet",
         "prs": workspace / "prs.parquet",
         "gwas_associations": workspace / "gwas_associations.parquet",
@@ -601,31 +606,130 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
             )
             hits.extend(_rows(cursor, "polygenic_scores"))
 
-        if has_trait_associations:
+        if "clinical_findings" in available:
+            evidence_projection = ", NULL AS evidence"
+            source_predicate = ""
+            source_parameters: List[Any] = []
+            if "clinical_evidence" in available:
+                evidence_projection = """,
+                    (
+                        SELECT list(
+                            struct_pack(
+                                evidence_id := evidence.evidence_id,
+                                source := evidence.source,
+                                source_record_id := evidence.source_record_id,
+                                source_version := evidence.source_version,
+                                assertion := evidence.assertion,
+                                review_status := evidence.review_status,
+                                retrieved_at := CAST(evidence.retrieved_at AS VARCHAR)
+                            )
+                            ORDER BY evidence.evidence_id
+                        )
+                        FROM clinical_evidence AS evidence
+                        WHERE list_contains(findings.evidence_ids, evidence.evidence_id)
+                    ) AS evidence
+                """
+                source_predicate = """
+                    OR EXISTS (
+                        SELECT 1
+                        FROM clinical_evidence AS evidence
+                        WHERE list_contains(findings.evidence_ids, evidence.evidence_id)
+                          AND lower(evidence.source) LIKE '%' || lower(?) || '%'
+                    )
+                """
+                source_parameters.append(normalized_query)
+
+            list_all = normalized_query.lower() in {
+                "clinical",
+                "clinical finding",
+                "clinical findings",
+            }
+            term_predicate = ""
+            parameters: List[Any] = []
+            if not list_all:
+                term_predicate = f"""
+                    AND (
+                        lower(findings.condition) LIKE '%' || lower(?) || '%'
+                        OR upper(COALESCE(findings.gene_symbol, '')) = upper(?)
+                        OR lower(COALESCE(findings.classification, '')) LIKE '%' || lower(?) || '%'
+                        OR lower(findings.claim_type) LIKE '%' || lower(?) || '%'
+                        OR lower(COALESCE(findings.variant_id, '')) = lower(?)
+                        {source_predicate}
+                    )
+                """
+                parameters = [normalized_query] * 5 + source_parameters
+
             cursor = connection.execute(
                 """
-                SELECT %s,
-                       list_slice(
-                           list_filter(
-                               trait_associations.traits,
-                               trait -> lower(trait) LIKE '%%' || lower(?) || '%%'
-                           ),
-                           1,
-                           3
-                       ) AS matched_traits
-                FROM variants
-                WHERE trait_associations.is_gwas_hit
-                  AND EXISTS (
-                      SELECT 1
-                      FROM UNNEST(trait_associations.traits) AS annotation(value)
-                      WHERE lower(value) LIKE '%%' || lower(?) || '%%'
-                  )
-                ORDER BY chrom, pos
+                SELECT findings.finding_id,
+                       findings.condition,
+                       findings.claim_type,
+                       findings.classification,
+                       findings.clinical_grade,
+                       findings.variant_id,
+                       COALESCE(findings.gene_symbol, variants.gene.symbol) AS gene_symbol,
+                       variants.rsid,
+                       CASE
+                           WHEN variants.variant_id IS NULL THEN NULL
+                           ELSE list_transform(
+                               variants.genotype.gt,
+                               allele_index -> CASE
+                                   WHEN allele_index = 0 THEN variants.ref
+                                   WHEN allele_index = 1 THEN variants.alt
+                                   ELSE '?'
+                               END
+                           )
+                       END AS called_alleles,
+                       variants.quality.call_confidence AS call_confidence,
+                       variants.pathogenicity.clinvar_significance AS clinvar_significance,
+                       variants.pathogenicity.clinvar_has_conflicts AS clinvar_has_conflicts,
+                       variants.pathogenicity.clinvar_conflict_summary AS clinvar_conflict_summary,
+                       variants.pathogenicity.clinvar_review_stars AS clinvar_review_stars,
+                       variants.pathogenicity.clinvar_submitters_count AS clinvar_submitters_count,
+                       variants.pathogenicity.clinvar_id AS clinvar_id,
+                       findings.evidence_ids
+                       %s
+                FROM clinical_findings AS findings
+                LEFT JOIN variants
+                  ON variants.variant_id = findings.variant_id
+                WHERE findings.clinical_grade = true
+                %s
+                ORDER BY findings.condition, findings.finding_id
                 LIMIT 25
-                """ % _trait_variant_projection(),
-                [normalized_query, normalized_query],
+                """ % (evidence_projection, term_predicate),
+                parameters,
             )
-            hits.extend(_rows(cursor, "trait_variants"))
+            hits.extend(_rows(cursor, "clinical_findings"))
+
+        if has_trait_associations:
+            try:
+                cursor = connection.execute(
+                    """
+                    SELECT %s,
+                           list_slice(
+                               list_filter(
+                                   trait_associations.traits,
+                                   trait -> lower(trait) LIKE '%%' || lower(?) || '%%'
+                               ),
+                               1,
+                               3
+                           ) AS matched_traits
+                    FROM variants
+                    WHERE trait_associations.is_gwas_hit
+                      AND EXISTS (
+                          SELECT 1
+                          FROM UNNEST(trait_associations.traits) AS annotation(value)
+                          WHERE lower(value) LIKE '%%' || lower(?) || '%%'
+                      )
+                    ORDER BY chrom, pos
+                    LIMIT 25
+                    """ % _trait_variant_projection(),
+                    [normalized_query, normalized_query],
+                )
+            except duckdb.Error:
+                has_trait_associations = False
+            else:
+                hits.extend(_rows(cursor, "trait_variants"))
 
         if "gwas_associations" in available and has_trait_associations:
             cursor = connection.execute(

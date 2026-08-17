@@ -295,6 +295,12 @@ PAGE = r'''<!doctype html>
     .field a { color: var(--accent); font-weight: 680; text-decoration-thickness: 1px; text-underline-offset: 3px; }
     .reference-links { display: flex; flex-wrap: wrap; gap: 5px 12px; }
     .source-link { display: inline-flex; margin-top: 18px; color: var(--accent); font-size: 13px; font-weight: 720; text-underline-offset: 3px; }
+    .clinical-conflict { margin-top: 16px; padding: 10px 12px; color: #714d12; background: #fff7e7; border: 1px solid #efd9ad; border-radius: 10px; font-size: 13px; font-weight: 680; }
+    .clinical-sources { display: grid; gap: 8px; margin-top: 19px; padding-top: 16px; border-top: 1px solid var(--line); }
+    .clinical-source { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 10px; font-size: 12px; }
+    .clinical-source .source-link { margin-top: 0; }
+    .clinical-source strong { font-size: 13px; }
+    .clinical-source span { color: var(--muted); }
     .technical-details { margin-top: 19px; padding-top: 16px; border-top: 1px solid var(--line); }
     .technical-details summary { color: var(--muted); font-size: 13px; font-weight: 680; cursor: pointer; }
     .technical-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px 20px; margin: 17px 0 0; }
@@ -493,7 +499,11 @@ PAGE = r'''<!doctype html>
       ref: "Reference allele", alt: "Alternate allele", genotype: "Genotype", zygosity: "Zygosity",
       call_confidence: "Call confidence", gene: "Gene annotation", gene_symbol: "Gene",
       hgvsp: "Protein change", clinvar_significance: "ClinVar classification",
-      clinvar_review_stars: "ClinVar review stars", clinvar_id: "ClinVar record",
+      clinvar_review_stars: "ClinVar review", clinvar_id: "ClinVar record",
+      clinvar_has_conflicts: "ClinVar conflicts", clinvar_conflict_summary: "Conflict summary",
+      clinvar_submitters_count: "ClinVar submitters", finding_id: "Finding identifier",
+      condition: "Condition", claim_type: "Claim type", classification: "Classification",
+      called_alleles: "Recorded genotype", evidence_ids: "Evidence identifiers", review_status: "Review status",
       clinical_grade: "Clinical-grade flag", diplotype: "Recorded diplotype", phenotype: "Recorded phenotype",
       activity_score: "Activity score", copy_number: "Copy number", cpic_level: "CPIC evidence level",
       affected_drugs: "Related medications", guideline_url: "Recorded guideline",
@@ -507,6 +517,7 @@ PAGE = r'''<!doctype html>
     };
 
     const sectionLabels = {
+      clinical_findings: "Clinical findings",
       variants: "Your recorded variants", genes: "Records for this gene",
       pharmacogenomics: "Medication-related records", polygenic_scores: "Traits and scores",
       trait_variants: "Related variants",
@@ -514,6 +525,7 @@ PAGE = r'''<!doctype html>
     };
 
     const recordLabels = {
+      clinical_findings: "",
       variants: "Personal variant record", genes: "Personal gene summary",
       pharmacogenomics: "Bundle pharmacogenomic record", polygenic_scores: "Recorded score",
       trait_variants: "",
@@ -521,6 +533,7 @@ PAGE = r'''<!doctype html>
     };
 
     const primaryFields = {
+      clinical_findings: ["classification", "called_alleles", "gene_symbol", "call_confidence", "review_status"],
       variants: ["zygosity", "call_confidence"],
       genes: ["variant_count", "actionable_count"],
       pharmacogenomics: [],
@@ -530,6 +543,11 @@ PAGE = r'''<!doctype html>
     };
 
     const topicKinds = {
+      clinical: {
+        label: "Clinical",
+        icon: "+",
+        prompt: "Which clinical findings are recorded in this bundle?"
+      },
       medications: {
         label: "Medications",
         icon: "Rx",
@@ -568,11 +586,12 @@ PAGE = r'''<!doctype html>
 
     function isPersonSpecificTopic(topic) {
       const sections = Array.isArray(topic.record_sections) ? topic.record_sections : [];
-      return sections.includes("pharmacogenomics") || sections.includes("polygenic_scores");
+      return sections.includes("clinical_findings") || sections.includes("pharmacogenomics") || sections.includes("polygenic_scores");
     }
 
     function topicIndicator(topic) {
       const personal = topic.personal || {};
+      const clinical = Array.isArray(personal.clinical_findings) ? personal.clinical_findings : [];
       const pgx = Array.isArray(personal.pharmacogenomics) ? personal.pharmacogenomics : [];
       const scores = Array.isArray(personal.polygenic_scores) ? personal.polygenic_scores : [];
       const hasPersonLinkedVariants = Boolean(personal.has_person_linked_variants);
@@ -581,7 +600,13 @@ PAGE = r'''<!doctype html>
       const value = document.createElement("span");
       value.className = "topic-indicator-value";
 
-      if (pgx.length === 1) {
+      if (clinical.length === 1) {
+        const finding = clinical[0];
+        const classification = formatValue(finding.classification || "Clinical finding");
+        value.textContent = finding.gene_symbol ? `${classification} · ${finding.gene_symbol}` : classification;
+      } else if (clinical.length > 1) {
+        value.textContent = `${clinical.length} clinical findings`;
+      } else if (pgx.length === 1) {
         const result = pgx[0].phenotype || pgx[0].diplotype || "PGx result";
         value.textContent = `${result} · ${pgx[0].gene_symbol}`;
       } else if (pgx.length > 1) {
@@ -639,7 +664,7 @@ PAGE = r'''<!doctype html>
         empty.className = "directory-empty";
         empty.textContent = filter
           ? "No topics match that filter."
-          : "This bundle does not contain a personal PGx result or recorded score for these common topics.";
+          : "This bundle does not contain a clinical finding, PGx result, or recorded score for these topics.";
         host.append(empty);
         return host;
       }
@@ -996,6 +1021,7 @@ PAGE = r'''<!doctype html>
     }
 
     function titleFor(hit, query) {
+      if (hit.section === "clinical_findings") return hit.condition;
       if (hit.section === "pharmacogenomics") {
         return hit.gene_symbol;
       }
@@ -1037,6 +1063,7 @@ PAGE = r'''<!doctype html>
 
     function fieldLabelFor(section, key) {
       if (section === "gwas" && key === "gene") return "Gene named by research";
+      if (section === "clinical_findings" && key === "call_confidence") return "Technical call quality";
       if (section === "trait_variants" && key === "called_alleles") return "Recorded genotype";
       if (section === "trait_variants" && key === "matched_traits") return "Matching recorded topics";
       if (section === "trait_variants" && key === "recorded_traits") return "Recorded topic labels";
@@ -1080,6 +1107,17 @@ PAGE = r'''<!doctype html>
         link.rel = "noopener noreferrer";
         link.textContent = `GWAS Catalog ${value}`;
         detail.append(link);
+      } else if (key === "clinvar_id" && typeof value === "string") {
+        const link = document.createElement("a");
+        link.href = /^\d+$/.test(value)
+          ? `https://www.ncbi.nlm.nih.gov/clinvar/variation/${encodeURIComponent(value)}/`
+          : `https://www.ncbi.nlm.nih.gov/clinvar/?term=${encodeURIComponent(value)}`;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = `ClinVar ${value}`;
+        detail.append(link);
+      } else if (key === "clinvar_review_stars") {
+        detail.textContent = `${value} of 4 stars`;
       } else if (key === "called_alleles" && Array.isArray(value)) {
         detail.textContent = value.join(" / ");
       } else if (key === "source" && value === "gwas_catalog") {
@@ -1089,6 +1127,87 @@ PAGE = r'''<!doctype html>
       }
       wrapper.append(label, detail);
       return wrapper;
+    }
+
+    function appendClinicalFindingData(card, hit) {
+      if (hit.clinvar_has_conflicts) {
+        const conflict = document.createElement("div");
+        conflict.className = "clinical-conflict";
+        conflict.textContent = hit.clinvar_conflict_summary
+          ? `Conflicting ClinVar submissions · ${formatValue(hit.clinvar_conflict_summary)}`
+          : "Conflicting ClinVar submissions";
+        card.append(conflict);
+      }
+
+      const evidence = Array.isArray(hit.evidence) ? hit.evidence : [];
+      const clinvarEvidence = evidence.find(item => String(item?.source || "").toLowerCase() === "clinvar");
+      const reviewStatus = clinvarEvidence?.review_status || (
+        hit.clinvar_review_stars !== null && hit.clinvar_review_stars !== undefined
+          ? `${hit.clinvar_review_stars} of 4 stars`
+          : ""
+      );
+      const visible = { ...hit, review_status: reviewStatus };
+      const fields = document.createElement("dl");
+      fields.className = "simple-fields";
+      ["classification", "called_alleles", "gene_symbol", "call_confidence", "review_status"].forEach(key => {
+        const value = visible[key];
+        if (value !== null && value !== undefined && value !== "") {
+          fields.append(fieldElement(key, value, hit.section));
+        }
+      });
+      if (fields.children.length) card.append(fields);
+
+      const sources = document.createElement("div");
+      sources.className = "clinical-sources";
+      const links = new Set();
+      evidence.forEach(item => {
+        if (!item || typeof item !== "object") return;
+        const sourceName = formatValue(item.source || "Recorded source");
+        const sourceId = item.source_record_id ? String(item.source_record_id) : "";
+        const row = document.createElement("div");
+        row.className = "clinical-source";
+        if (String(item.source || "").toLowerCase() === "clinvar" && sourceId) {
+          const link = document.createElement("a");
+          link.className = "source-link";
+          link.href = /^\d+$/.test(sourceId)
+            ? `https://www.ncbi.nlm.nih.gov/clinvar/variation/${encodeURIComponent(sourceId)}/`
+            : `https://www.ncbi.nlm.nih.gov/clinvar/?term=${encodeURIComponent(sourceId)}`;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = `ClinVar ${sourceId}`;
+          row.append(link);
+          links.add(sourceId);
+        } else {
+          const name = document.createElement("strong");
+          name.textContent = sourceId ? `${sourceName} ${sourceId}` : sourceName;
+          row.append(name);
+        }
+        const metadata = [
+          item.source_version,
+          item.retrieved_at ? formatBundleDate(item.retrieved_at) : ""
+        ].filter(value => value !== null && value !== undefined && value !== "");
+        if (metadata.length) {
+          const detail = document.createElement("span");
+          detail.textContent = metadata.join(" · ");
+          row.append(detail);
+        }
+        sources.append(row);
+      });
+      if (hit.clinvar_id && !links.has(String(hit.clinvar_id))) {
+        const row = document.createElement("div");
+        row.className = "clinical-source";
+        const link = document.createElement("a");
+        link.className = "source-link";
+        link.href = /^\d+$/.test(String(hit.clinvar_id))
+          ? `https://www.ncbi.nlm.nih.gov/clinvar/variation/${encodeURIComponent(hit.clinvar_id)}/`
+          : `https://www.ncbi.nlm.nih.gov/clinvar/?term=${encodeURIComponent(hit.clinvar_id)}`;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = `ClinVar ${hit.clinvar_id}`;
+        row.append(link);
+        sources.append(row);
+      }
+      if (sources.children.length) card.append(sources);
     }
 
     function appendPharmacogenomicsData(card, hit, query) {
@@ -1143,7 +1262,7 @@ PAGE = r'''<!doctype html>
     function cardFor(hit, query) {
       const card = document.createElement("article");
       card.className = "card";
-      const compact = hit.section === "trait_variants" || hit.section === "gwas";
+      const compact = hit.section === "clinical_findings" || hit.section === "trait_variants" || hit.section === "gwas";
 
       if (!compact) {
         const type = document.createElement("div");
@@ -1178,7 +1297,9 @@ PAGE = r'''<!doctype html>
         }
       }
 
-      if (hit.section === "pharmacogenomics") {
+      if (hit.section === "clinical_findings") {
+        appendClinicalFindingData(card, hit);
+      } else if (hit.section === "pharmacogenomics") {
         appendPharmacogenomicsData(card, hit, query);
       } else {
         const simple = document.createElement("dl");
@@ -1209,6 +1330,11 @@ PAGE = r'''<!doctype html>
       const alreadyShown = new Set(primaryFields[hit.section] || []);
       Object.entries(hit).forEach(([key, value]) => {
         if (key === "section" || value === null || value === undefined || value === "") return;
+        if (hit.section === "clinical_findings" && [
+          "condition", "classification", "called_alleles", "gene_symbol", "call_confidence",
+          "clinvar_has_conflicts", "clinvar_conflict_summary", "clinvar_review_stars",
+          "clinvar_submitters_count", "clinvar_id", "evidence"
+        ].includes(key)) return;
         if ((hit.section === "trait_variants" || hit.section === "gwas") && alreadyShown.has(key)) return;
         fields.append(fieldElement(key, value, hit.section));
       });
@@ -1244,7 +1370,7 @@ PAGE = r'''<!doctype html>
       const count = payload.hits.length;
       const matchingTopic = latestTopics.find(topic => topic.query.toLowerCase() === payload.query.toLowerCase());
       const grouped = Object.groupBy(payload.hits, hit => hit.section);
-      const hasPersonLinkedRecords = Boolean(grouped.trait_variants?.length);
+      const hasPersonLinkedRecords = Boolean(grouped.clinical_findings?.length || grouped.trait_variants?.length);
       document.querySelector("#results-title").textContent = count
         ? "What the bundle records"
         : matchingTopic ? "No personal result recorded" : "Not covered";
@@ -1262,8 +1388,9 @@ PAGE = r'''<!doctype html>
         results.scrollIntoView({ behavior: "smooth", block: "start" });
         return;
       }
-      const sectionOrder = ["pharmacogenomics", "polygenic_scores", "trait_variants", "genes", "variants", "gwas"];
+      const sectionOrder = ["clinical_findings", "pharmacogenomics", "polygenic_scores", "trait_variants", "genes", "variants", "gwas"];
       const hasClearerRecord = Boolean(
+        grouped.clinical_findings?.length ||
         grouped.pharmacogenomics?.length ||
         grouped.polygenic_scores?.length ||
         grouped.trait_variants?.length
@@ -1273,7 +1400,7 @@ PAGE = r'''<!doctype html>
         const section = document.createElement("section");
         section.className = `section section-${sectionName}`;
         const isSecondary = hasClearerRecord && (sectionName === "variants" || sectionName === "gwas");
-        const showCount = !hasPersonLinkedRecords || (sectionName !== "trait_variants" && sectionName !== "gwas");
+        const showCount = !hasPersonLinkedRecords || !["clinical_findings", "trait_variants", "gwas"].includes(sectionName);
         if (isSecondary) {
           const disclosure = document.createElement("details");
           disclosure.className = "result-disclosure";
