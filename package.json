@@ -12,6 +12,7 @@
     "test:python": "node scripts/run-python-tests.mjs",
     "test": "npm run typecheck && npm run build:electron && node --test .electron-dist/*.test.js && npm run test:python",
     "test:e2e": "npm run build:electron && playwright test",
+    "prototype:topic-states": "python3 prototype/topic_evidence_state_tui.py",
     "build:engine": "./prototype/build engine",
     "package": "npm run build:electron && npm run build:engine && electron-builder --dir",
     "dist": "npm run build:electron && npm run build:engine && electron-builder"
