@@ -1,4 +1,9 @@
 .genome-explorer/
+node_modules/
+.electron-dist/
+/release/
+/test-results/
+/playwright-report/
 /build/
 /dist/
 /*.spec

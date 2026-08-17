@@ -440,7 +440,7 @@ PAGE = r'''<!doctype html>
       <div class="trust-grid" aria-label="Privacy information">
         <div class="trust-item"><strong>Stays local</strong><span>The bundle is read only on this computer.</span></div>
         <div class="trust-item"><strong>No account or AI</strong><span>No sign-in, API key, or AI connection is required.</span></div>
-        <div class="trust-item"><strong>No upload</strong><span>The browser never copies the bundle, and the app does not send it over the network.</span></div>
+        <div class="trust-item"><strong>No upload</strong><span>Explorer never copies the source bundle, and the app does not send it over the network.</span></div>
       </div>
     </main>
 
@@ -542,6 +542,8 @@ PAGE = r'''<!doctype html>
     const nextVariant = document.querySelector("#next-variant");
     const bundlesButton = document.querySelector("#bundles-button");
     const quitButton = document.querySelector("#quit-button");
+    const desktop = window.genomeExplorer?.desktop === true;
+    if (desktop) quitButton.hidden = true;
     let statusTimer = null;
     let explorerReady = false;
     let latestStatus = null;
@@ -852,7 +854,7 @@ PAGE = r'''<!doctype html>
       topicSummary.textContent = `${personalPgx} personal PGx · ${scores} scores · ${research} research topics`;
       const variant = selectedTopicVariant();
       prototypeVariantLabel.textContent = `${variant} · ${topicVariants[variant]}`;
-      prototypeSwitcher.hidden = false;
+      prototypeSwitcher.hidden = desktop;
       if (variant === "B") topicCatalog.replaceChildren(renderGuidedQuestions(latestTopics));
       else if (variant === "C") topicCatalog.replaceChildren(renderDirectory(latestTopics));
       else topicCatalog.replaceChildren(renderCatalogCards(latestTopics));
@@ -1417,20 +1419,24 @@ PAGE = r'''<!doctype html>
       search(input.value);
     });
 
-    previousVariant.addEventListener("click", () => changeTopicVariant(-1));
-    nextVariant.addEventListener("click", () => changeTopicVariant(1));
-    window.addEventListener("keydown", event => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      if (event.target.matches("input, textarea, [contenteditable]")) return;
-      changeTopicVariant(event.key === "ArrowLeft" ? -1 : 1);
-    });
+    if (!desktop) {
+      previousVariant.addEventListener("click", () => changeTopicVariant(-1));
+      nextVariant.addEventListener("click", () => changeTopicVariant(1));
+      window.addEventListener("keydown", event => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        if (event.target.matches("input, textarea, [contenteditable]")) return;
+        changeTopicVariant(event.key === "ArrowLeft" ? -1 : 1);
+      });
+    }
 
     chooseButton.addEventListener("click", async () => {
       chooseButton.disabled = true;
       chooseButton.textContent = "Opening file selector";
       showSelectionStatus("Opening the local file selector.", { busy: true });
       try {
-        const status = await postJson("/api/select");
+        const status = desktop
+          ? await window.genomeExplorer.chooseBundle()
+          : await postJson("/api/select");
         renderAppStatus(status);
         if (status.status === "choosing" || status.status === "validating") scheduleStatusPoll(150);
       } catch (error) {
@@ -1439,6 +1445,9 @@ PAGE = r'''<!doctype html>
         showSelectionStatus(error.message || "The local file selector could not be opened.", { error: true });
       }
     });
+    if (desktop) {
+      window.genomeExplorer.onChooseBundleRequested(() => chooseButton.click());
+    }
 
     bundlesButton.addEventListener("click", async () => {
       window.clearTimeout(statusTimer);
@@ -1456,7 +1465,11 @@ PAGE = r'''<!doctype html>
       quitButton.disabled = true;
       quitButton.textContent = "Stopping";
       try {
-        await fetch(`${basePath}/api/shutdown`, { method: "POST" });
+        if (desktop) {
+          await window.genomeExplorer.quit();
+        } else {
+          await fetch(`${basePath}/api/shutdown`, { method: "POST" });
+        }
       } finally {
         document.body.innerHTML = '<main class="shell"><p class="eyebrow">Genome Explorer stopped</p><h1>Your local session has ended.</h1><p class="lede">You can close this tab. Your source bundle was not modified.</p></main>';
       }

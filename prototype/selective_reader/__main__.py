@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from .core import WorkspaceReport, json_ready, open_bundle, search_workspace
-from .server import serve, serve_launcher
+from .server import serve, serve_desktop, serve_launcher
 
 
 BOLD = "\033[1m"
@@ -232,7 +232,28 @@ def main() -> None:
         action="store_true",
         help="force full archive and manifest validation instead of using a receipt",
     )
+    parser.add_argument(
+        "--desktop-backend",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--workspace-root",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
+    if args.desktop_backend:
+        if args.archive is not None or args.batch or args.serve:
+            parser.error("--desktop-backend cannot be combined with archive commands")
+        if args.workspace_root is None:
+            parser.error("--desktop-backend requires --workspace-root")
+        serve_desktop(
+            workspace_root=args.workspace_root.expanduser().resolve(),
+            force_validate=args.verify,
+            port=args.port,
+        )
+        return
     if args.batch and args.archive is None:
         parser.error("--batch requires an archive path")
     app_mode = args.archive is None

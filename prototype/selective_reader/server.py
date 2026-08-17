@@ -54,6 +54,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
             self.active_nickname = entry.nickname
             self.topics = topics_for_workspace(report.workspace)
         self.token = secrets.token_urlsafe(24)
+        self.desktop_token = secrets.token_urlsafe(32)
         self.nonce = secrets.token_urlsafe(18)
         self.expected_host = "127.0.0.1:%d" % self.server_port
         self.origin = "http://%s" % self.expected_host
@@ -117,6 +118,27 @@ class LocalExplorerServer(ThreadingHTTPServer):
             self.active_nickname = ""
             self.topics = []
         threading.Thread(target=self._select_and_open, daemon=True).start()
+        return True
+
+    def begin_open_path(self, archive: str) -> bool:
+        path = Path(archive).expanduser()
+        if not archive.lower().endswith(".genome.tar.gz") or not path.is_file():
+            raise ValueError("choose a file ending in .genome.tar.gz")
+        with self.state_lock:
+            if self.state_status in {"choosing", "validating"}:
+                return False
+            self.state_status = "validating"
+            self.state_error = ""
+            self.archive_name = path.name
+            self.report = None
+            self.active_bundle_id = ""
+            self.active_nickname = ""
+            self.topics = []
+        threading.Thread(
+            target=self._open_path,
+            args=(str(path),),
+            daemon=True,
+        ).start()
         return True
 
     def show_library(self) -> bool:
@@ -189,6 +211,25 @@ class LocalExplorerServer(ThreadingHTTPServer):
             with self.state_lock:
                 self.state_status = "validating"
                 self.archive_name = Path(archive).name
+            if self.workspace_root is None:
+                raise RuntimeError("local workspace is unavailable")
+            report = open_bundle(
+                archive,
+                self.workspace_root,
+                force_validate=self.force_validate,
+            )
+            self._accept_report(report)
+        except Exception as error:
+            with self.state_lock:
+                self.report = None
+                self.state_status = "failed"
+                self.state_error = str(error)
+                self.active_bundle_id = ""
+                self.active_nickname = ""
+                self.topics = []
+
+    def _open_path(self, archive: str) -> None:
+        try:
             if self.workspace_root is None:
                 raise RuntimeError("local workspace is unavailable")
             report = open_bundle(
@@ -307,6 +348,23 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
             self._reject(403)
             return
         path = urlsplit(self.path).path.rstrip("/")
+        if path == self.server.base_path + "/api/desktop/open":
+            supplied_token = self.headers.get("X-Genome-Explorer-Desktop", "")
+            if not secrets.compare_digest(supplied_token, self.server.desktop_token):
+                self._reject(403)
+                return
+            try:
+                payload = self._read_json_body()
+                archive = payload.get("archive")
+                if not isinstance(archive, str):
+                    raise ValueError("bundle selection is invalid")
+                started = self.server.begin_open_path(archive)
+                if not started:
+                    raise ValueError("another bundle is already opening")
+                self._send_json(202, self.server.status_payload())
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            return
         if path == self.server.base_path + "/api/shutdown":
             self._send_json(200, {"status": "stopped"})
             threading.Thread(target=self.server.shutdown, daemon=True).start()
@@ -371,9 +429,26 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
             self._send_json(500, {"error": "search could not be completed"})
 
 
-def _run_server(server: LocalExplorerServer, open_browser: bool) -> None:
-    print("Genome Explorer ready: %s" % server.url, flush=True)
-    print("Press Ctrl-C to stop.", flush=True)
+def _run_server(
+    server: LocalExplorerServer,
+    open_browser: bool,
+    desktop_backend: bool = False,
+) -> None:
+    if desktop_backend:
+        print(
+            "GENOME_EXPLORER_READY "
+            + json.dumps(
+                {
+                    "url": server.url,
+                    "desktop_token": server.desktop_token,
+                },
+                separators=(",", ":"),
+            ),
+            flush=True,
+        )
+    else:
+        print("Genome Explorer ready: %s" % server.url, flush=True)
+        print("Press Ctrl-C to stop.", flush=True)
     if open_browser:
         threading.Timer(0.2, webbrowser.open, args=(server.url,)).start()
     try:
@@ -414,3 +489,13 @@ def serve_launcher(
         force_validate=force_validate,
     )
     _run_server(server, open_browser)
+
+
+def serve_desktop(workspace_root: Path, force_validate: bool, port: int) -> None:
+    server = LocalExplorerServer(
+        None,
+        port,
+        workspace_root=workspace_root,
+        force_validate=force_validate,
+    )
+    _run_server(server, open_browser=False, desktop_backend=True)
