@@ -302,6 +302,7 @@ PAGE = r'''<!doctype html>
     .field dt { margin-bottom: 5px; color: var(--muted); font-size: 10px; font-weight: 760; letter-spacing: .07em; text-transform: uppercase; }
     .field dd { margin: 0; overflow-wrap: anywhere; font-size: 14px; line-height: 1.45; }
     .field a { color: var(--accent); font-weight: 680; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    .reference-links { display: flex; flex-wrap: wrap; gap: 5px 12px; }
     .source-link { display: inline-flex; margin-top: 18px; color: var(--accent); font-size: 13px; font-weight: 720; text-underline-offset: 3px; }
     .technical-details { margin-top: 19px; padding-top: 16px; border-top: 1px solid var(--line); }
     .technical-details summary { color: var(--muted); font-size: 13px; font-weight: 680; cursor: pointer; }
@@ -323,7 +324,7 @@ PAGE = r'''<!doctype html>
       .directory-nav-list { display: flex; overflow-x: auto; padding-bottom: 2px; }
       .directory-nav-button { flex: 0 0 auto; width: auto; }
       .directory-toolbar { grid-template-columns: 1fr; }
-      .section-variants .cards { grid-template-columns: 1fr; }
+      .section-variants .cards, .section-trait_variants .cards { grid-template-columns: 1fr; }
       .technical-fields { grid-template-columns: 1fr 1fr; }
       .open-card { grid-template-columns: auto 1fr; }
       .choose-button { grid-column: 1 / -1; }
@@ -540,8 +541,8 @@ PAGE = r'''<!doctype html>
       genes: ["variant_count", "actionable_count"],
       pharmacogenomics: [],
       polygenic_scores: ["percentile", "reference_population"],
-      trait_variants: ["called_alleles", "matched_traits", "gene", "call_confidence"],
-      gwas: ["gene", "source"]
+      trait_variants: ["called_alleles", "matched_traits", "gene", "call_confidence", "study_pmids"],
+      gwas: ["gene", "source", "pubmed_id", "study_accession"]
     };
 
     const topicKinds = {
@@ -1051,7 +1052,7 @@ PAGE = r'''<!doctype html>
       if (hit.section === "polygenic_scores") return `The bundle contains a recorded score for ${hit.trait}.`;
       if (hit.section === "trait_variants") {
         const topic = Array.isArray(hit.matched_traits) && hit.matched_traits.length ? hit.matched_traits[0] : query;
-        return `This person-specific variant record has a bundle-recorded research annotation for ${topic}.`;
+        return `This genome contains this variant. The bundle links it to a recorded research topic: ${topic}.`;
       }
       if (hit.section === "gwas") {
         const identifier = hit.rsid || hit.variant_id || "this variant";
@@ -1070,7 +1071,7 @@ PAGE = r'''<!doctype html>
         return "This shows that the bundle has personal variant records for this gene. It is not a test of whether the gene itself is present or absent.";
       }
       if (hit.section === "trait_variants") {
-        return "This confirms that the record belongs to this genome bundle. It does not say whether the variant increases or decreases the trait, and it is not a risk score.";
+        return "The research reference is not a diagnosis or risk estimate. The bundle does not record whether this person's genotype increases or decreases the trait.";
       }
       if (hit.section === "gwas") {
         const geneContext = hit.gene ? ` ${hit.gene} is named by the research source.` : "";
@@ -1084,7 +1085,7 @@ PAGE = r'''<!doctype html>
       if (section === "trait_variants" && key === "called_alleles") return "Recorded genotype";
       if (section === "trait_variants" && key === "matched_traits") return "Matching recorded topics";
       if (section === "trait_variants" && key === "recorded_traits") return "Recorded topic labels";
-      if (section === "trait_variants" && key === "study_pmids") return "Recorded PubMed IDs";
+      if (section === "trait_variants" && key === "study_pmids") return "Research references";
       if (section === "variants" && key === "gene") return "Gene annotation";
       return fieldLabels[key] || key.replaceAll("_", " ");
     }
@@ -1102,8 +1103,32 @@ PAGE = r'''<!doctype html>
         link.rel = "noopener noreferrer";
         link.textContent = "Open recorded source";
         detail.append(link);
+      } else if (key === "study_pmids" || key === "pubmed_id") {
+        const identifiers = (Array.isArray(value) ? value : [value]).map(String).filter(identifier => /^\d+$/.test(identifier));
+        if (identifiers.length) {
+          detail.classList.add("reference-links");
+          identifiers.forEach(identifier => {
+            const link = document.createElement("a");
+            link.href = `https://pubmed.ncbi.nlm.nih.gov/${identifier}/`;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = `PubMed ${identifier}`;
+            detail.append(link);
+          });
+        } else {
+          detail.textContent = formatValue(value);
+        }
+      } else if (key === "study_accession" && typeof value === "string" && /^GCST\d+$/i.test(value)) {
+        const link = document.createElement("a");
+        link.href = `https://www.ebi.ac.uk/gwas/studies/${encodeURIComponent(value)}`;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = `GWAS Catalog ${value}`;
+        detail.append(link);
       } else if (key === "called_alleles" && Array.isArray(value)) {
         detail.textContent = value.join(" / ");
+      } else if (key === "source" && value === "gwas_catalog") {
+        detail.textContent = "GWAS Catalog";
       } else {
         detail.textContent = formatValue(value);
       }
@@ -1220,8 +1245,10 @@ PAGE = r'''<!doctype html>
       technicalSummary.textContent = "Technical details";
       const fields = document.createElement("dl");
       fields.className = "technical-fields";
+      const alreadyShown = new Set(primaryFields[hit.section] || []);
       Object.entries(hit).forEach(([key, value]) => {
         if (key === "section" || value === null || value === undefined || value === "") return;
+        if ((hit.section === "trait_variants" || hit.section === "gwas") && alreadyShown.has(key)) return;
         fields.append(fieldElement(key, value, hit.section));
       });
       technical.append(technicalSummary, fields);

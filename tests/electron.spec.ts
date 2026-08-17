@@ -83,7 +83,12 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(firstWindow.getByText("Related records in this genome")).toBeVisible();
     await expect(firstWindow.getByText("Recorded in this genome").first()).toBeVisible();
     await expect(firstWindow.getByText("High density lipoprotein cholesterol levels").first()).toBeVisible();
-    await expect(firstWindow.getByText(/This confirms that the record belongs to this genome bundle/).first()).toBeVisible();
+    await expect(firstWindow.getByText(/The research reference is not a diagnosis or risk estimate/).first()).toBeVisible();
+    const firstPersonalRecord = firstWindow.locator(".section-trait_variants .card").first();
+    await expect(firstPersonalRecord.getByRole("link", { name: "PubMed 34887591" })).toHaveAttribute(
+      "href",
+      "https://pubmed.ncbi.nlm.nih.gov/34887591/",
+    );
     await expect(firstWindow.getByText("Research associations")).toBeVisible();
     await expect(firstWindow.getByText(/has not been presented as a match/)).toHaveCount(0);
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
@@ -96,6 +101,12 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await supportingResearch.locator(":scope > .result-disclosure > summary").click();
     await expect(supportingResearch.getByText(/The same variant is present in the person-specific records above/).first()).toBeVisible();
     await expect(supportingResearch.getByText(/It does not provide a person-specific interpretation/).first()).toBeVisible();
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await firstWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "supporting-research.png"),
+        fullPage: true,
+      });
+    }
     await firstWindow.getByRole("tab", { name: /Medications/ }).click();
     await expect(firstWindow.locator(".directory-row")).toHaveCount(15);
 
