@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from prototype.selective_reader.saved_results import SavedResultsStore
+from prototype.selective_reader.saved_results import SavedResultsStore, saved_result_id
 
 
 class SavedResultsStoreTest(unittest.TestCase):
@@ -83,6 +83,12 @@ class SavedResultsStoreTest(unittest.TestCase):
         self.path.write_text("[]", encoding="utf-8")
 
         self.assertEqual(self.store.entries("bundle-1"), [])
+
+    def test_record_identity_survives_a_json_number_round_trip(self):
+        record = dict(self.record, activity_score=2.0)
+        round_tripped = json.loads(json.dumps(record))
+
+        self.assertEqual(saved_result_id(record), saved_result_id(round_tripped))
 
 
 if __name__ == "__main__":

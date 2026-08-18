@@ -196,6 +196,20 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(firstWindow.locator(".directory-row")).toHaveCount(15);
 
     await firstWindow.getByRole("button", { name: /Genome search/ }).click();
+    await firstWindow.getByRole("searchbox", { name: "Search your genome bundle" }).fill("CYP2C9");
+    await firstWindow.getByRole("button", { name: "Search", exact: true }).click();
+    const cyp2c9Card = firstWindow.locator(".section-pharmacogenomics .card").first();
+    const cyp2c9Save = cyp2c9Card.getByRole("button", { name: /Save CYP2C9/ });
+    await cyp2c9Save.click();
+    await expect(cyp2c9Card.getByRole("button", { name: /Saved CYP2C9/ })).toBeVisible();
+    await firstWindow.getByRole("button", { name: /Saved results/ }).click();
+    await expect(firstWindow.locator(".saved-result-row")).toHaveCount(1);
+    const savedCyp2c9 = firstWindow.locator(".saved-result-row").first();
+    await expect(savedCyp2c9).toContainText("CYP2C9");
+    await savedCyp2c9.locator(":scope > summary").click();
+    await savedCyp2c9.getByRole("button", { name: "Remove" }).click();
+    await expect(firstWindow.locator(".saved-result-row")).toHaveCount(0);
+    await firstWindow.getByRole("button", { name: /Genome search/ }).click();
     await firstWindow.getByRole("searchbox", { name: "Search your genome bundle" }).fill("CYP2C19");
     await firstWindow.getByRole("button", { name: "Search", exact: true }).click();
     await expect(firstWindow.locator("#results-title")).toHaveText("Personal records found");

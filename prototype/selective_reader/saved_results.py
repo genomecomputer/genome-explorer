@@ -41,6 +41,8 @@ def _clean_json_value(value: Any, depth: int = 0) -> Any:
     if isinstance(value, float):
         if value != value or value in (float("inf"), float("-inf")):
             raise ValueError("saved record contains an unsupported number")
+        if value.is_integer():
+            return int(value)
         return value
     if isinstance(value, list):
         return [_clean_json_value(item, depth + 1) for item in value]
