@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import shutil
 import tarfile
@@ -812,6 +813,68 @@ def _variant_projection() -> str:
         pathogenicity.clinvar_id AS clinvar_id,
         clinical_grade
     """
+
+
+def variants_for_region(
+    workspace_path: str,
+    chrom: str,
+    start: int,
+    end: int,
+    page: int = 1,
+    page_size: int = 25,
+) -> Dict[str, Any]:
+    """Return one stable, bounded page of person-specific variant rows."""
+    if not chrom or start < 1 or end < start:
+        raise ValueError("genome map region is invalid")
+    if page < 1 or page_size < 1 or page_size > 100:
+        raise ValueError("genome map page is invalid")
+
+    workspace = Path(workspace_path).resolve()
+    variants = workspace / "variants.parquet"
+    if not variants.is_dir():
+        raise ValueError("workspace does not contain variants.parquet")
+
+    connection = duckdb.connect()
+    try:
+        connection.execute("PRAGMA threads=2")
+        variants_path = _sql_path(variants)
+        connection.execute(
+            "CREATE VIEW variants AS SELECT * FROM read_parquet("
+            "'%s/**/*.parquet', hive_partitioning=true)" % variants_path
+        )
+        predicate = (
+            "lower(replace(chrom, 'chr', '')) = "
+            "lower(replace(?, 'chr', '')) AND pos BETWEEN ? AND ?"
+        )
+        parameters: List[Any] = [chrom, start, end]
+        total = int(
+            connection.execute(
+                "SELECT count(*)::BIGINT FROM variants WHERE " + predicate,
+                parameters,
+            ).fetchone()[0]
+        )
+        page_count = max(1, math.ceil(total / page_size))
+        if total and page > page_count:
+            raise ValueError("genome map page is outside the selected region")
+        offset = (page - 1) * page_size
+        cursor = connection.execute(
+            "SELECT %s FROM variants WHERE %s "
+            "ORDER BY pos, variant_id LIMIT ? OFFSET ?"
+            % (_variant_projection(), predicate),
+            [*parameters, page_size, offset],
+        )
+        return {
+            "chrom": chrom,
+            "start": start,
+            "end": end,
+            "page": page,
+            "page_size": page_size,
+            "page_count": page_count,
+            "total": total,
+            "hits": _rows(cursor, "variants"),
+        }
+    finally:
+        connection.close()
 
 
 def _trait_variant_projection() -> str:

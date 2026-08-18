@@ -10,7 +10,13 @@ from typing import Any, Callable, Dict, Optional
 from urllib.parse import urlsplit
 
 from .bundle_library import BundleLibrary
-from .core import WorkspaceReport, json_ready, open_bundle, search_workspace
+from .core import (
+    WorkspaceReport,
+    json_ready,
+    open_bundle,
+    search_workspace,
+    variants_for_region,
+)
 from .genome_map import genome_map_for_workspace
 from .saved_results import SavedResultsStore
 from .topics import topics_for_workspace
@@ -134,6 +140,29 @@ class LocalExplorerServer(ThreadingHTTPServer):
                 )
                 self.genome_map_cache[report.workspace] = cached
             return cached
+
+    def genome_map_region_payload(
+        self,
+        chrom: str,
+        start: int,
+        end: int,
+        page: int,
+    ) -> Dict[str, Any]:
+        report = self.ready_report()
+        if report is None:
+            raise ValueError("choose and verify a bundle first")
+        genome_map = self.genome_map_payload()
+        is_map_region = any(
+            chromosome.get("chrom") == chrom
+            and any(
+                bin_row.get("start") == start and bin_row.get("end") == end
+                for bin_row in chromosome.get("bins", [])
+            )
+            for chromosome in genome_map.get("chromosomes", [])
+        )
+        if not is_map_region:
+            raise ValueError("genome map region is invalid")
+        return variants_for_region(report.workspace, chrom, start, end, page=page)
 
     def begin_selection(self) -> bool:
         with self.state_lock:
@@ -536,6 +565,31 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
                 )
             except (ValueError, json.JSONDecodeError) as error:
                 self._send_json(400, {"error": str(error)})
+            return
+        if path == self.server.base_path + "/api/genome-map/region":
+            try:
+                payload = self._read_json_body()
+                chrom = payload.get("chrom")
+                start = payload.get("start")
+                end = payload.get("end")
+                page = payload.get("page", 1)
+                integers = (start, end, page)
+                if (
+                    not isinstance(chrom, str)
+                    or not all(
+                        isinstance(value, int) and not isinstance(value, bool)
+                        for value in integers
+                    )
+                ):
+                    raise ValueError("genome map region request is invalid")
+                self._send_json(
+                    200,
+                    self.server.genome_map_region_payload(chrom, start, end, page),
+                )
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            except Exception:
+                self._send_json(500, {"error": "genome map region could not be loaded"})
             return
         if path != self.server.base_path + "/api/search":
             self._reject()

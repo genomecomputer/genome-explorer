@@ -4,6 +4,7 @@ from pathlib import Path
 
 import duckdb
 
+from prototype.selective_reader.core import variants_for_region
 from prototype.selective_reader.genome_map import genome_map_for_workspace
 
 
@@ -19,12 +20,26 @@ class GenomeMapTest(unittest.TestCase):
         connection.execute(
             """
             COPY (
-                SELECT 'chr1:1:A:G'::VARCHAR AS variant_id,
-                       'rs1'::VARCHAR AS rsid,
-                       'chr1'::VARCHAR AS chrom,
-                       1::BIGINT AS pos
-                UNION ALL
-                SELECT 'chr1:248956422:C:T', 'rs2', 'chr1', 248956422
+                SELECT variant_id, rsid, chrom, pos, ref, alt,
+                       struct_pack(gt := [0, 1]::INTEGER[], zygosity := 'het') AS genotype,
+                       struct_pack(call_confidence := 'high') AS quality,
+                       struct_pack(symbol := 'MAP1') AS gene,
+                       struct_pack(hgvsp := NULL::VARCHAR) AS consequence,
+                       struct_pack(
+                           clinvar_significance := NULL::VARCHAR,
+                           clinvar_has_conflicts := false,
+                           clinvar_conflict_summary := NULL::VARCHAR,
+                           clinvar_review_stars := NULL::INTEGER,
+                           clinvar_submitters_count := NULL::INTEGER,
+                           clinvar_id := NULL::VARCHAR
+                       ) AS pathogenicity,
+                       false AS clinical_grade
+                FROM (
+                    VALUES
+                        ('chr1:1:A:G', 'rs1', 'chr1', 1, 'A', 'G'),
+                        ('chr1:2:C:T', 'rs1b', 'chr1', 2, 'C', 'T'),
+                        ('chr1:248956422:C:T', 'rs2', 'chr1', 248956422, 'C', 'T')
+                ) AS records(variant_id, rsid, chrom, pos, ref, alt)
             ) TO ? (FORMAT PARQUET)
             """,
             [str(chromosome_one / "part-0000.parquet")],
@@ -35,7 +50,22 @@ class GenomeMapTest(unittest.TestCase):
                 SELECT 'chr2:10:G:A'::VARCHAR AS variant_id,
                        NULL::VARCHAR AS rsid,
                        'chr2'::VARCHAR AS chrom,
-                       10::BIGINT AS pos
+                       10::BIGINT AS pos,
+                       'G'::VARCHAR AS ref,
+                       'A'::VARCHAR AS alt,
+                       struct_pack(gt := [0, 1]::INTEGER[], zygosity := 'het') AS genotype,
+                       struct_pack(call_confidence := 'high') AS quality,
+                       struct_pack(symbol := NULL::VARCHAR) AS gene,
+                       struct_pack(hgvsp := NULL::VARCHAR) AS consequence,
+                       struct_pack(
+                           clinvar_significance := NULL::VARCHAR,
+                           clinvar_has_conflicts := false,
+                           clinvar_conflict_summary := NULL::VARCHAR,
+                           clinvar_review_stars := NULL::INTEGER,
+                           clinvar_submitters_count := NULL::INTEGER,
+                           clinvar_id := NULL::VARCHAR
+                       ) AS pathogenicity,
+                       false AS clinical_grade
             ) TO ? (FORMAT PARQUET)
             """,
             [str(chromosome_two / "part-0000.parquet")],
@@ -45,24 +75,38 @@ class GenomeMapTest(unittest.TestCase):
     def tearDown(self):
         self.temporary_directory.cleanup()
 
-    def test_builds_bounded_variant_density_and_drill_down_queries(self):
+    def test_builds_consistent_ten_megabase_variant_density_windows(self):
         result = genome_map_for_workspace(str(self.workspace), "GRCh38")
 
         self.assertTrue(result["supported"])
-        self.assertEqual(result["bin_count"], 24)
-        self.assertEqual(result["total_variant_records"], 3)
+        self.assertEqual(result["bin_size_bases"], 10_000_000)
+        self.assertEqual(result["total_variant_records"], 4)
         self.assertEqual(len(result["chromosomes"]), 25)
         chromosome_one = result["chromosomes"][0]
         self.assertEqual(chromosome_one["chrom"], "chr1")
-        self.assertEqual(chromosome_one["variant_count"], 2)
-        self.assertEqual(len(chromosome_one["bins"]), 24)
-        self.assertEqual(chromosome_one["bins"][0]["variant_count"], 1)
-        self.assertEqual(chromosome_one["bins"][0]["example_query"], "rs1")
+        self.assertEqual(chromosome_one["variant_count"], 3)
+        self.assertEqual(len(chromosome_one["bins"]), 25)
+        self.assertEqual(chromosome_one["bins"][0]["variant_count"], 2)
+        self.assertEqual(chromosome_one["bins"][0]["start"], 1)
+        self.assertEqual(chromosome_one["bins"][0]["end"], 10_000_000)
         self.assertEqual(chromosome_one["bins"][-1]["variant_count"], 1)
-        self.assertEqual(chromosome_one["bins"][-1]["example_query"], "rs2")
+        self.assertEqual(chromosome_one["bins"][-1]["end"], 248_956_422)
         chromosome_two = result["chromosomes"][1]
-        self.assertEqual(chromosome_two["bins"][0]["example_query"], "chr2:10:G:A")
+        self.assertEqual(chromosome_two["bins"][0]["variant_count"], 1)
         self.assertEqual(result["callability"]["state"], "not_included")
+
+    def test_returns_complete_stable_region_pages(self):
+        first_page = variants_for_region(
+            str(self.workspace), "chr1", 1, 10_000_000, page=1, page_size=1
+        )
+        second_page = variants_for_region(
+            str(self.workspace), "chr1", 1, 10_000_000, page=2, page_size=1
+        )
+
+        self.assertEqual(first_page["total"], 2)
+        self.assertEqual(first_page["page_count"], 2)
+        self.assertEqual(first_page["hits"][0]["rsid"], "rs1")
+        self.assertEqual(second_page["hits"][0]["rsid"], "rs1b")
 
     def test_reports_site_callability_records_without_treating_them_as_coverage(self):
         connection = duckdb.connect()
@@ -82,8 +126,8 @@ class GenomeMapTest(unittest.TestCase):
 
         self.assertEqual(result["callability"]["state"], "available")
         self.assertEqual(result["callability"]["kind"], "site_records")
-        self.assertEqual(result["callability"]["record_count"], 3)
-        self.assertEqual(result["chromosomes"][0]["callability_records"], 2)
+        self.assertEqual(result["callability"]["record_count"], 2)
+        self.assertEqual(result["chromosomes"][0]["callability_records"], 1)
         self.assertEqual(result["chromosomes"][1]["callability_records"], 1)
 
     def test_reports_an_included_but_empty_callability_table(self):
@@ -120,6 +164,8 @@ class GenomeMapTest(unittest.TestCase):
             COPY (
                 SELECT 'chr1'::VARCHAR AS chrom, 1::BIGINT AS start_pos,
                        100::BIGINT AS end_pos, true AS callable
+                UNION ALL SELECT 'chr1', 51, 150, true
+                UNION ALL SELECT 'chr1', 500, 600, false
                 UNION ALL SELECT 'chr2', 1, 50, true
             ) TO ? (FORMAT PARQUET)
             """,
@@ -132,7 +178,12 @@ class GenomeMapTest(unittest.TestCase):
         self.assertEqual(result["callability"]["state"], "available")
         self.assertEqual(result["callability"]["kind"], "interval_records")
         self.assertEqual(result["callability"]["source"], "callable_regions.parquet")
-        self.assertEqual(result["callability"]["record_count"], 2)
+        self.assertEqual(result["callability"]["record_count"], 3)
+        self.assertEqual(result["callability"]["callable_bases"], 200)
+        self.assertEqual(result["chromosomes"][0]["callable_bases"], 150)
+        self.assertEqual(result["chromosomes"][1]["callable_bases"], 50)
+        self.assertEqual(result["chromosomes"][0]["bins"][0]["callable_bases"], 150)
+        self.assertEqual(result["chromosomes"][0]["callability_percent"], 0.0)
 
     def test_does_not_infer_a_map_for_an_unsupported_genome_build(self):
         result = genome_map_for_workspace(str(self.workspace), "GRCh37")

@@ -97,9 +97,21 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
       await firstWindow.setViewportSize(mapViewport);
     }
     await chromosomeOne.locator(".density-bin:not(:disabled)").first().click();
-    await expect(firstWindow.locator("#results")).toBeVisible();
-    await expect(firstWindow.locator("#result-meta")).toContainText("Search:");
-    await firstWindow.getByRole("button", { name: "← Back" }).click();
+    await expect(firstWindow.locator("#map-region-browser")).toBeVisible();
+    await expect(firstWindow.locator("#map-region-title")).toContainText("Chromosome 1:");
+    await expect(firstWindow.locator("#map-region-summary")).toContainText("recorded variants in this region");
+    await expect(firstWindow.locator("#map-region-content .record-row")).toHaveCount(25);
+    await expect(firstWindow.locator("#map-region-page-range")).toContainText("1-25 of");
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await firstWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "genome-map-region.png"),
+        fullPage: true,
+      });
+    }
+    await firstWindow.locator("#map-region-next").click();
+    await expect(firstWindow.locator("#map-region-page-range")).toContainText("26-50 of");
+    await firstWindow.locator("#map-region-close").click();
+    await expect(firstWindow.locator("#map-region-browser")).toBeHidden();
     await expect(firstWindow.locator("#view-map")).toBeVisible();
     await firstWindow.locator("#map-table-disclosure > summary").click();
     await expect(firstWindow.locator("#map-table-body tr")).toHaveCount(25);
