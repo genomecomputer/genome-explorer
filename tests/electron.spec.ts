@@ -72,6 +72,37 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(firstWindow.locator("#view-library")).toBeHidden();
     await expect(firstWindow.locator("#results")).toBeHidden();
     await expect(firstWindow).toHaveURL(/#search$/);
+    await firstWindow.getByRole("button", { name: /Genome map/ }).click();
+    await expect(firstWindow.locator("#view-map")).toBeVisible();
+    await expect(firstWindow.getByRole("heading", { name: "Genome map" })).toBeVisible();
+    await expect(firstWindow.locator("#map-total")).toHaveText("5,159,392 recorded variants");
+    await expect(firstWindow.locator("#map-callability")).toContainText("Not included in this bundle");
+    await expect(firstWindow.locator(".chromosome-row")).toHaveCount(25);
+    const chromosomeOne = firstWindow.locator('.chromosome-row[data-chromosome="chr1"]');
+    await expect(chromosomeOne).toContainText("396,227");
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await firstWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "genome-map.png"),
+        fullPage: true,
+      });
+      const mapViewport = await firstWindow.evaluate(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }));
+      await firstWindow.setViewportSize({ width: 700, height: 900 });
+      await firstWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "genome-map-narrow.png"),
+        fullPage: true,
+      });
+      await firstWindow.setViewportSize(mapViewport);
+    }
+    await chromosomeOne.locator(".density-bin:not(:disabled)").first().click();
+    await expect(firstWindow.locator("#results")).toBeVisible();
+    await expect(firstWindow.locator("#result-meta")).toContainText("Search:");
+    await firstWindow.getByRole("button", { name: "← Back" }).click();
+    await expect(firstWindow.locator("#view-map")).toBeVisible();
+    await firstWindow.locator("#map-table-disclosure > summary").click();
+    await expect(firstWindow.locator("#map-table-body tr")).toHaveCount(25);
     await firstWindow.getByRole("tab", { name: /Personal results/ }).click();
     await expect(firstWindow.locator("#view-search")).toBeHidden();
     await expect(firstWindow.locator("#view-library")).toBeVisible();
@@ -446,6 +477,8 @@ test("opens and searches a current v1.1 bundle", async () => {
     await expect(window.locator("#explorer")).toBeVisible({ timeout: 30_000 });
     await expect(window.locator("#validation")).toHaveText("Verified");
     await expect(window.locator("#spec-version")).toHaveText("v1.1.0");
+    await window.getByRole("button", { name: /Genome map/ }).click();
+    await expect(window.locator("#map-callability")).toContainText("Included, no records");
 
     await window.getByRole("tab", { name: /Medications/ }).click();
     const clopidogrelTopic = window.getByRole("button", { name: "Search this bundle for Clopidogrel" });

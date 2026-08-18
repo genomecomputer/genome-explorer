@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 from .bundle_library import BundleLibrary
 from .core import WorkspaceReport, json_ready, open_bundle, search_workspace
+from .genome_map import genome_map_for_workspace
 from .saved_results import SavedResultsStore
 from .topics import topics_for_workspace
 from .web import PAGE
@@ -48,6 +49,8 @@ class LocalExplorerServer(ThreadingHTTPServer):
             else None
         )
         self.state_lock = threading.Lock()
+        self.map_lock = threading.Lock()
+        self.genome_map_cache: Dict[str, Dict[str, Any]] = {}
         self.state_status = "ready" if report is not None else "waiting"
         self.state_error = ""
         self.archive_name = Path(report.archive).name if report is not None else ""
@@ -117,6 +120,20 @@ class LocalExplorerServer(ThreadingHTTPServer):
             if self.state_status != "ready":
                 return None
             return self.report
+
+    def genome_map_payload(self) -> Dict[str, Any]:
+        report = self.ready_report()
+        if report is None:
+            raise ValueError("choose and verify a bundle first")
+        with self.map_lock:
+            cached = self.genome_map_cache.get(report.workspace)
+            if cached is None:
+                cached = genome_map_for_workspace(
+                    report.workspace,
+                    report.genome_build,
+                )
+                self.genome_map_cache[report.workspace] = cached
+            return cached
 
     def begin_selection(self) -> bool:
         with self.state_lock:
@@ -403,6 +420,14 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
                 self._send_json(200, self.server.saved_payload())
             except ValueError as error:
                 self._send_json(409, {"error": str(error)})
+            return
+        if path == self.server.base_path + "/api/genome-map":
+            try:
+                self._send_json(200, self.server.genome_map_payload())
+            except ValueError as error:
+                self._send_json(409, {"error": str(error)})
+            except Exception:
+                self._send_json(500, {"error": "genome map could not be prepared"})
             return
         self._reject()
 

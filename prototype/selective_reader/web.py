@@ -362,6 +362,47 @@ PAGE = r'''<!doctype html>
     .saved-result-context { margin: 0 0 15px; color: var(--muted); font-size: 11px; }
     .saved-result-actions { display: flex; justify-content: flex-end; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
     .saved-empty { margin-top: 18px; }
+    .genome-map-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+    .map-build { padding-bottom: 5px; color: var(--muted); font-size: 12px; }
+    .map-summary-strip {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 24px;
+      background: rgba(255,255,255,.6); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    }
+    .map-stat { min-width: 0; padding: 15px 17px; }
+    .map-stat + .map-stat { border-left: 1px solid var(--line); }
+    .map-stat span { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .map-stat strong { display: block; margin-top: 5px; font-size: 14px; font-weight: 760; }
+    .map-explanation { display: flex; align-items: center; gap: 9px; margin: 17px 0 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .density-key { flex: 0 0 auto; width: 28px; height: 8px; background: linear-gradient(90deg, #d9ebe2, var(--accent)); border-radius: 999px; }
+    .map-callability-key { display: inline-flex; align-items: center; gap: 6px; margin-left: 5px; }
+    .callability-key-dot { width: 6px; height: 6px; background: #6e9db7; border-radius: 50%; }
+    .chromosome-map { overflow: hidden; background: white; border: 1px solid var(--line); border-radius: 7px; }
+    .chromosome-row {
+      display: grid; grid-template-columns: 40px minmax(260px, 1fr) 105px; align-items: center; gap: 14px;
+      min-height: 42px; padding: 7px 14px; border-bottom: 1px solid #e7ede9;
+    }
+    .chromosome-row:last-child { border-bottom: 0; }
+    .chromosome-name { font-size: 12px; font-weight: 790; }
+    .chromosome-track-shell { position: relative; display: flex; align-items: center; min-width: 0; height: 19px; }
+    .chromosome-track {
+      display: flex; height: 14px; min-width: 4%; overflow: hidden; background: #edf2ef;
+      border: 1px solid #d9e3dd; border-radius: 999px;
+    }
+    .chromosome-row.has-callability .chromosome-track-shell::after {
+      content: ""; width: 5px; height: 5px; margin-left: 7px; background: #6e9db7; border-radius: 50%;
+    }
+    .density-bin { flex: 1 1 0; min-width: 2px; padding: 0; background: rgba(23,107,77,var(--density)); border: 0; border-right: 1px solid rgba(255,255,255,.32); cursor: pointer; }
+    .density-bin:last-child { border-right: 0; }
+    .density-bin:hover:not(:disabled), .density-bin:focus-visible { outline: 2px solid var(--accent-dark); outline-offset: -2px; }
+    .density-bin:disabled { cursor: default; }
+    .chromosome-count { color: var(--muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+    .map-table-disclosure { margin-top: 14px; background: transparent; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .map-table-disclosure > summary { padding: 13px 2px; color: var(--accent-dark); font-size: 12px; font-weight: 740; cursor: pointer; }
+    .map-table-wrap { overflow-x: auto; padding-bottom: 10px; }
+    .map-table { width: 100%; border-collapse: collapse; background: white; font-size: 12px; }
+    .map-table th, .map-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+    .map-table th { color: var(--muted); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+    .map-loading { margin-top: 20px; }
     .empty { padding: 38px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed #cbd8d0; border-radius: 14px; }
     .error { color: #812f2f; background: #fff1f0; border-color: #f0d2cf; }
     .spinner { display: inline-block; width: 15px; height: 15px; margin-right: 7px; vertical-align: -2px; border: 2px solid rgba(255,255,255,.4); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
@@ -412,6 +453,10 @@ PAGE = r'''<!doctype html>
       .saved-result-row > summary { grid-template-columns: minmax(0, 1fr) 16px; gap: 8px; }
       .saved-result-kind { grid-column: 1; grid-row: 2; text-align: left; }
       .saved-result-arrow { grid-column: 2; grid-row: 1; }
+      .map-summary-strip { grid-template-columns: 1fr; }
+      .map-stat + .map-stat { border-top: 1px solid var(--line); border-left: 0; }
+      .chromosome-row { grid-template-columns: 30px minmax(170px, 1fr); gap: 9px; padding: 8px 10px; }
+      .chromosome-count { grid-column: 2; text-align: left; }
       .welcome { padding-top: 52px; }
       .open-card { grid-template-columns: 1fr; }
       .open-icon { width: 46px; height: 46px; }
@@ -470,7 +515,7 @@ PAGE = r'''<!doctype html>
     #explorer h1 { max-width: none; font-size: clamp(34px, 4vw, 48px); letter-spacing: -.045em; }
     #explorer .lede { margin-top: 9px; font-size: 15px; }
     #explorer .eyebrow { margin-bottom: 9px; }
-    .workspace-view.topic-library, .workspace-view.results, .workspace-view.saved-results { margin-top: 0; }
+    .workspace-view.topic-library, .workspace-view.results, .workspace-view.saved-results, .workspace-view.genome-map-view { margin-top: 0; }
     #explorer .topic-library h1 { font-size: clamp(34px, 4vw, 44px); }
     #explorer .results h1 { font-size: clamp(30px, 3.2vw, 40px); }
     .workspace-back {
@@ -484,7 +529,7 @@ PAGE = r'''<!doctype html>
     .search-button { border-radius: 5px; }
     .featured-search, .example { border-radius: 5px; }
     .secondary-tools { grid-template-columns: 1fr; margin-top: 18px; }
-    .disclosure, .topic-browser, .record-list, .result-disclosure, .card, .open-card, .bundle-item, .trust-item, .saved-result-list {
+    .disclosure, .topic-browser, .record-list, .result-disclosure, .card, .open-card, .bundle-item, .trust-item, .saved-result-list, .chromosome-map {
       border-radius: 7px; box-shadow: none;
     }
     .topic-browser { display: block; background: white; }
@@ -538,8 +583,11 @@ PAGE = r'''<!doctype html>
               <span class="sidebar-nav-index">05</span><span>Traits</span><span class="sidebar-nav-count"></span>
             </button>
           </div>
+          <button class="sidebar-nav-button" id="sidebar-map" type="button">
+            <span class="sidebar-nav-index">06</span><span>Genome map</span>
+          </button>
           <button class="sidebar-nav-button" id="sidebar-saved" type="button">
-            <span class="sidebar-nav-index">06</span><span>Saved results</span><span class="sidebar-nav-count" id="sidebar-saved-count">0</span>
+            <span class="sidebar-nav-index">07</span><span>Saved results</span><span class="sidebar-nav-count" id="sidebar-saved-count">0</span>
           </button>
         </nav>
         <div class="sidebar-bundle">
@@ -639,6 +687,39 @@ PAGE = r'''<!doctype html>
         <div class="topic-catalog" id="topic-catalog" role="tabpanel"></div>
       </section>
 
+      <section class="workspace-view genome-map-view" id="view-map" aria-labelledby="genome-map-title" hidden>
+        <div class="genome-map-head">
+          <div>
+            <h1 id="genome-map-title">Genome map</h1>
+            <p class="lede">Recorded variant distribution across this bundle.</p>
+          </div>
+          <div class="map-build" id="map-build"></div>
+        </div>
+        <div class="map-summary-strip" aria-label="Genome map summary">
+          <div class="map-stat">
+            <span>Recorded variant rows</span>
+            <strong id="map-total">Loading</strong>
+          </div>
+          <div class="map-stat">
+            <span>Callability data</span>
+            <strong id="map-callability">Loading</strong>
+          </div>
+        </div>
+        <p class="map-explanation"><span class="density-key" aria-hidden="true"></span>Bars show where variant records appear in this bundle. They do not show importance or risk.<span class="map-callability-key" id="map-callability-key" hidden><span class="callability-key-dot" aria-hidden="true"></span>Blue dots mark callability records.</span></p>
+        <div id="genome-map-content" aria-live="polite">
+          <div class="empty map-loading">Preparing the chromosome overview...</div>
+        </div>
+        <details class="map-table-disclosure" id="map-table-disclosure" hidden>
+          <summary>Table view</summary>
+          <div class="map-table-wrap">
+            <table class="map-table">
+              <thead><tr><th>Chromosome</th><th>Length</th><th>Recorded variants</th><th>Callability records</th></tr></thead>
+              <tbody id="map-table-body"></tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+
       <section class="workspace-view saved-results" id="view-saved" aria-labelledby="saved-results-title" hidden>
         <div class="saved-results-head">
           <div>
@@ -694,6 +775,14 @@ PAGE = r'''<!doctype html>
     const topicLibraryTitle = document.querySelector("#topic-library-title");
     const topicLibraryLede = document.querySelector("#topic-library-lede");
     const viewSearch = document.querySelector("#view-search");
+    const viewMap = document.querySelector("#view-map");
+    const genomeMapContent = document.querySelector("#genome-map-content");
+    const mapTotal = document.querySelector("#map-total");
+    const mapCallability = document.querySelector("#map-callability");
+    const mapCallabilityKey = document.querySelector("#map-callability-key");
+    const mapBuild = document.querySelector("#map-build");
+    const mapTableDisclosure = document.querySelector("#map-table-disclosure");
+    const mapTableBody = document.querySelector("#map-table-body");
     const viewSaved = document.querySelector("#view-saved");
     const savedResultsList = document.querySelector("#saved-results-list");
     const savedFeedback = document.querySelector("#saved-feedback");
@@ -703,6 +792,7 @@ PAGE = r'''<!doctype html>
     const sidebarContext = document.querySelector("#sidebar-context");
     const sidebarBundleName = document.querySelector("#sidebar-bundle-name");
     const sidebarSearch = document.querySelector("#sidebar-search");
+    const sidebarMap = document.querySelector("#sidebar-map");
     const sidebarSaved = document.querySelector("#sidebar-saved");
     const sidebarSavedCount = document.querySelector("#sidebar-saved-count");
     const sidebarViewButtons = Array.from(document.querySelectorAll("[data-sidebar-view]"));
@@ -717,6 +807,8 @@ PAGE = r'''<!doctype html>
     let activeDirectoryView = "personal";
     let activeWorkspaceRoute = "search";
     let resultReturnRoute = "search";
+    let genomeMapBundleId = "";
+    let genomeMapLoading = false;
     let savedResults = [];
     let savedResultIds = new Set();
     let savedBundleId = "";
@@ -989,6 +1081,10 @@ PAGE = r'''<!doctype html>
       sidebarSearch.classList.toggle("is-active", searchActive);
       if (searchActive) sidebarSearch.setAttribute("aria-current", "page");
       else sidebarSearch.removeAttribute("aria-current");
+      const mapActive = route === "map" || (route === "results" && resultReturnRoute === "map");
+      sidebarMap.classList.toggle("is-active", mapActive);
+      if (mapActive) sidebarMap.setAttribute("aria-current", "page");
+      else sidebarMap.removeAttribute("aria-current");
       const savedActive = route === "saved" || (route === "results" && resultReturnRoute === "saved");
       sidebarSaved.classList.toggle("is-active", savedActive);
       if (savedActive) sidebarSaved.setAttribute("aria-current", "page");
@@ -1002,13 +1098,14 @@ PAGE = r'''<!doctype html>
 
     function showWorkspaceRoute(route, { historyMode = "push", focusSearch = false } = {}) {
       const isDirectoryRoute = Object.hasOwn(directoryViews, route);
-      const resolvedRoute = route === "results" || route === "search" || route === "saved" || isDirectoryRoute ? route : "search";
+      const resolvedRoute = route === "results" || route === "search" || route === "map" || route === "saved" || isDirectoryRoute ? route : "search";
       if (Object.hasOwn(directoryViews, resolvedRoute) && activeDirectoryView !== resolvedRoute) {
         activeDirectoryView = resolvedRoute;
         renderTopicCatalog(latestTopics);
       }
       viewSearch.hidden = resolvedRoute !== "search";
       topicLibrary.hidden = !Object.hasOwn(directoryViews, resolvedRoute);
+      viewMap.hidden = resolvedRoute !== "map";
       viewSaved.hidden = resolvedRoute !== "saved";
       results.hidden = resolvedRoute !== "results";
       activeWorkspaceRoute = resolvedRoute;
@@ -1021,9 +1118,11 @@ PAGE = r'''<!doctype html>
       }
       window.scrollTo({ top: 0, behavior: "auto" });
       if (focusSearch) window.setTimeout(() => input.focus(), 0);
+      if (resolvedRoute === "map") loadGenomeMap();
     }
 
     sidebarSearch.addEventListener("click", () => showWorkspaceRoute("search", { focusSearch: true }));
+    sidebarMap.addEventListener("click", () => showWorkspaceRoute("map"));
     sidebarSaved.addEventListener("click", () => showWorkspaceRoute("saved"));
 
     sidebarViewButtons.forEach(control => {
@@ -1215,6 +1314,9 @@ PAGE = r'''<!doctype html>
         bundlesButton.disabled = false;
         chooseButton.disabled = false;
         populateBundleStatus(status);
+        if (genomeMapBundleId && genomeMapBundleId !== status.active_bundle_id) {
+          resetGenomeMap();
+        }
         if (savedBundleId !== status.active_bundle_id) {
           savedBundleId = status.active_bundle_id;
           savedFeedback.textContent = "";
@@ -1240,6 +1342,7 @@ PAGE = r'''<!doctype html>
       bundlesButton.hidden = true;
       bundlesButton.disabled = false;
       explorerReady = false;
+      resetGenomeMap();
       savedBundleId = "";
       setSavedResults([]);
       if (status.status === "choosing") {
@@ -1316,6 +1419,168 @@ PAGE = r'''<!doctype html>
       if (hit.section === "variants") return hit.rsid ? `Identifier: ${hit.rsid}` : "";
       if (hit.section === "genes") return "Personal variant records found";
       return hit.rsid ? `Identifier: ${hit.rsid}` : "";
+    }
+
+    function resetGenomeMap() {
+      genomeMapBundleId = "";
+      genomeMapLoading = false;
+      mapBuild.textContent = "";
+      mapTotal.textContent = "Loading";
+      mapCallability.textContent = "Loading";
+      mapCallabilityKey.hidden = true;
+      genomeMapContent.replaceChildren();
+      const loading = document.createElement("div");
+      loading.className = "empty map-loading";
+      loading.textContent = "Preparing the chromosome overview...";
+      genomeMapContent.append(loading);
+      mapTableDisclosure.hidden = true;
+      mapTableDisclosure.open = false;
+      mapTableBody.replaceChildren();
+    }
+
+    function callabilityText(callability) {
+      if (callability?.state === "available") {
+        const kind = callability.kind === "interval_records" ? "interval" : "site";
+        return `Included · ${Number(callability.record_count).toLocaleString("en-US")} ${kind} records`;
+      }
+      if (callability?.state === "included_empty") return "Included, no records";
+      if (callability?.state === "summary_unavailable") return "Included, summary unavailable";
+      if (callability?.state === "not_included") return "Not included in this bundle";
+      return "Not evaluated";
+    }
+
+    function mapLength(value) {
+      if (value < 1000000) return `${Number(value).toLocaleString("en-US")} bp`;
+      return `${(value / 1000000).toFixed(1)} Mb`;
+    }
+
+    function renderGenomeMap(payload) {
+      mapBuild.textContent = payload.genome_build || "Genome build not recorded";
+      mapCallability.textContent = callabilityText(payload.callability);
+      mapCallabilityKey.hidden = payload.callability?.state !== "available";
+      genomeMapContent.replaceChildren();
+      mapTableBody.replaceChildren();
+      mapTableDisclosure.hidden = true;
+
+      if (!payload.supported) {
+        mapTotal.textContent = "Overview unavailable";
+        const unavailable = document.createElement("div");
+        unavailable.className = "empty";
+        unavailable.textContent = "This genome build is not covered by the offline chromosome map.";
+        genomeMapContent.append(unavailable);
+        return;
+      }
+
+      const chromosomes = Array.isArray(payload.chromosomes) ? payload.chromosomes : [];
+      mapTotal.textContent = `${Number(payload.total_variant_records).toLocaleString("en-US")} recorded variants`;
+      const maxLength = Math.max(...chromosomes.map(chromosome => chromosome.length), 1);
+      const maxBinCount = Math.max(
+        ...chromosomes.flatMap(chromosome => chromosome.bins.map(bin => bin.variant_count)),
+        1
+      );
+      const map = document.createElement("div");
+      map.className = "chromosome-map";
+      map.setAttribute("aria-label", "Recorded variants by chromosome");
+
+      chromosomes.forEach(chromosome => {
+        const row = document.createElement("div");
+        row.className = "chromosome-row";
+        row.dataset.chromosome = chromosome.chrom;
+        if (chromosome.callability_records > 0) row.classList.add("has-callability");
+
+        const name = document.createElement("span");
+        name.className = "chromosome-name";
+        name.textContent = chromosome.label;
+        const shell = document.createElement("div");
+        shell.className = "chromosome-track-shell";
+        if (chromosome.callability_records > 0) {
+          shell.title = `${Number(chromosome.callability_records).toLocaleString("en-US")} callability records`;
+        }
+        const track = document.createElement("div");
+        track.className = "chromosome-track";
+        track.style.width = `${Math.max(4, chromosome.length / maxLength * 100)}%`;
+        track.setAttribute("role", "group");
+        track.setAttribute("aria-label", `Chromosome ${chromosome.label} density bins`);
+        chromosome.bins.forEach(bin => {
+          const control = document.createElement("button");
+          control.className = "density-bin";
+          control.type = "button";
+          control.dataset.count = String(bin.variant_count);
+          const density = bin.variant_count
+            ? 0.18 + 0.82 * Math.sqrt(bin.variant_count / maxBinCount)
+            : 0;
+          control.style.setProperty("--density", density.toFixed(3));
+          const range = `${Number(bin.start).toLocaleString("en-US")} to ${Number(bin.end).toLocaleString("en-US")}`;
+          control.setAttribute(
+            "aria-label",
+            `Chromosome ${chromosome.label}, ${range}: ${Number(bin.variant_count).toLocaleString("en-US")} recorded variants${bin.example_query ? ". Open a recorded variant" : ""}`
+          );
+          control.title = `${range} · ${Number(bin.variant_count).toLocaleString("en-US")} recorded variants`;
+          control.disabled = !bin.example_query;
+          if (bin.example_query) {
+            control.addEventListener("click", () => {
+              input.value = bin.example_query;
+              search(bin.example_query);
+            });
+          }
+          track.append(control);
+        });
+        shell.append(track);
+        const count = document.createElement("span");
+        count.className = "chromosome-count";
+        count.textContent = Number(chromosome.variant_count).toLocaleString("en-US");
+        row.append(name, shell, count);
+        map.append(row);
+
+        const tableRow = document.createElement("tr");
+        const callabilityCell = payload.callability?.state === "available"
+          ? chromosome.callability_records
+            ? Number(chromosome.callability_records).toLocaleString("en-US")
+            : "No records"
+          : payload.callability?.state === "included_empty"
+            ? "No records"
+            : "Not included";
+        [
+          chromosome.label,
+          mapLength(chromosome.length),
+          Number(chromosome.variant_count).toLocaleString("en-US"),
+          callabilityCell
+        ].forEach(value => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          tableRow.append(cell);
+        });
+        mapTableBody.append(tableRow);
+      });
+
+      genomeMapContent.append(map);
+      mapTableDisclosure.hidden = false;
+    }
+
+    async function loadGenomeMap() {
+      const requestedBundleId = latestStatus?.active_bundle_id;
+      if (!requestedBundleId || genomeMapLoading || genomeMapBundleId === requestedBundleId) return;
+      genomeMapLoading = true;
+      genomeMapContent.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(`${basePath}/api/genome-map`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Genome map could not be loaded.");
+        if (latestStatus?.active_bundle_id !== requestedBundleId) return;
+        renderGenomeMap(payload);
+        genomeMapBundleId = requestedBundleId;
+      } catch (error) {
+        mapTotal.textContent = "Overview unavailable";
+        mapCallability.textContent = "Unavailable";
+        genomeMapContent.replaceChildren();
+        const unavailable = document.createElement("div");
+        unavailable.className = "empty error";
+        unavailable.textContent = error.message || "Genome map could not be loaded.";
+        genomeMapContent.append(unavailable);
+      } finally {
+        genomeMapLoading = false;
+        genomeMapContent.removeAttribute("aria-busy");
+      }
     }
 
     function recordForSave(hit) {
