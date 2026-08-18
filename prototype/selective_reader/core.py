@@ -643,6 +643,7 @@ def _answerability_for_search(
     connection: Any,
     workspace: Path,
     available: set[str],
+    query: str,
     query_kind: str,
     hits: List[Dict[str, Any]],
     coordinate: Optional[re.Match[str]],
@@ -655,6 +656,13 @@ def _answerability_for_search(
             "matching_bundle_records_found",
             sections=sorted({str(hit["section"]) for hit in hits}),
         )
+
+    if query_kind == "term":
+        from .topics import topic_for_query
+
+        topic = topic_for_query(str(workspace), query)
+        if topic is not None and isinstance(topic.get("answerability"), dict):
+            return topic["answerability"]
 
     context = _bundle_context(workspace)
     if query_kind == "coordinate" and coordinate is not None:
@@ -1131,6 +1139,7 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
         connection,
         workspace,
         available,
+        normalized_query,
         query_kind,
         hits,
         coordinate,

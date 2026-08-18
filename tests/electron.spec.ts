@@ -103,12 +103,21 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(cholesterolTopic.locator(".topic-indicator-value")).toHaveText("Related variants");
     const lactoseTopic = firstWindow.getByRole("button", { name: "Search this bundle for Lactose intolerance" });
     await expect(lactoseTopic.locator(".topic-indicator")).toHaveClass(/no-data/);
-    await expect(lactoseTopic.locator(".topic-indicator-value")).toHaveText("No personal result");
+    await expect(lactoseTopic.locator(".topic-indicator-value")).toHaveText("No matching record");
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await firstWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "topic-answerability.png"),
+        fullPage: true,
+      });
+    }
     await lactoseTopic.click();
-    await expect(firstWindow.locator("#results-title")).toHaveText("Not enough bundle data");
+    await expect(firstWindow.locator("#results-title")).toHaveText("No matching record");
     await expect(firstWindow.locator("#results")).toHaveAttribute(
       "data-answerability-state",
-      "insufficient_bundle_data",
+      "analysis_included_no_record",
+    );
+    await expect(firstWindow.locator("#result-notice-text")).toHaveText(
+      "Relevant analysis is included, but this bundle does not record a personal result for this trait.",
     );
     await expect(firstWindow.locator(".section-gwas")).toHaveCount(0);
     await firstWindow.getByRole("button", { name: "← Back" }).click();
@@ -369,6 +378,26 @@ test("opens and searches a current v1.1 bundle", async () => {
     await expect(window.locator("#validation")).toHaveText("Verified");
     await expect(window.locator("#spec-version")).toHaveText("v1.1.0");
 
+    await window.getByRole("tab", { name: /Medications/ }).click();
+    const clopidogrelTopic = window.getByRole("button", { name: "Search this bundle for Clopidogrel" });
+    await expect(clopidogrelTopic.locator(".topic-indicator-value")).toHaveText("Analysis not included");
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await window.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "topic-analysis-not-included.png"),
+        fullPage: true,
+      });
+    }
+    await clopidogrelTopic.click();
+    await expect(window.locator("#results-title")).toHaveText("Analysis not included");
+    await expect(window.locator("#results")).toHaveAttribute(
+      "data-answerability-state",
+      "analysis_not_included",
+    );
+    await expect(window.locator("#result-notice-text")).toHaveText(
+      "This bundle does not include the analysis needed to answer this medication.",
+    );
+
+    await window.getByRole("button", { name: /Genome search/ }).click();
     await window.getByRole("searchbox", { name: "Search your genome bundle" }).fill("HFE");
     const searchResponse = window.waitForResponse((response) => response.url().endsWith("/api/search"));
     await window.getByRole("button", { name: "Search", exact: true }).click();

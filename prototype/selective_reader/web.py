@@ -736,17 +736,17 @@ PAGE = r'''<!doctype html>
       medications: {
         label: "Medications",
         title: "Medications",
-        description: "Browse medications linked to pharmacogenomic records in this bundle."
+        description: "Check this bundle for pharmacogenomic results on common medications."
       },
       conditions: {
         label: "Conditions",
         title: "Conditions",
-        description: "Browse conditions covered by recorded scores and person-linked annotations."
+        description: "Check this bundle for recorded scores and person-linked findings."
       },
       traits: {
         label: "Traits",
         title: "Traits",
-        description: "Browse traits covered by recorded scores and person-linked annotations."
+        description: "Check this bundle for recorded scores and person-linked findings."
       }
     };
 
@@ -757,6 +757,7 @@ PAGE = r'''<!doctype html>
 
     function topicIndicator(topic) {
       const personal = topic.personal || {};
+      const answerability = topic.answerability || {};
       const clinical = Array.isArray(personal.clinical_findings) ? personal.clinical_findings : [];
       const pgx = Array.isArray(personal.pharmacogenomics) ? personal.pharmacogenomics : [];
       const scores = Array.isArray(personal.polygenic_scores) ? personal.polygenic_scores : [];
@@ -785,9 +786,15 @@ PAGE = r'''<!doctype html>
       } else if (hasPersonLinkedVariants) {
         indicator.classList.add("related");
         value.textContent = "Related variants";
+      } else if (answerability.state === "analysis_included_no_record") {
+        indicator.classList.add("no-data");
+        value.textContent = "No matching record";
+      } else if (answerability.state === "analysis_not_included") {
+        indicator.classList.add("no-data");
+        value.textContent = "Analysis not included";
       } else {
         indicator.classList.add("no-data");
-        value.textContent = "No personal result";
+        value.textContent = "Not enough bundle data";
       }
       indicator.append(value);
       return indicator;
@@ -798,6 +805,7 @@ PAGE = r'''<!doctype html>
       row.className = "directory-row";
       row.type = "button";
       row.dataset.topicQuery = topic.query;
+      row.dataset.answerabilityState = topic.answerability?.state || "insufficient_bundle_data";
       row.setAttribute("aria-label", `Search this bundle for ${topic.label}`);
       row.addEventListener("click", () => {
         input.value = topic.query;
@@ -1721,7 +1729,29 @@ PAGE = r'''<!doctype html>
           notice: "The bundle cannot determine whether a matching variant is present at this position."
         };
       }
+      if (state === "analysis_included_no_record") {
+        const subject = answerability?.topic_kind === "medications"
+          ? "medication"
+          : answerability?.topic_kind === "conditions"
+            ? "condition"
+            : "trait";
+        return {
+          title: "No matching record",
+          notice: `Relevant analysis is included, but this bundle does not record a personal result for this ${subject}.`
+        };
+      }
       if (state === "analysis_not_included") {
+        if (answerability?.scope === "topic") {
+          const subject = answerability?.topic_kind === "medications"
+            ? "medication"
+            : answerability?.topic_kind === "conditions"
+              ? "condition"
+              : "trait";
+          return {
+            title: "Analysis not included",
+            notice: `This bundle does not include the analysis needed to answer this ${subject}.`
+          };
+        }
         return {
           title: "Callability not included",
           notice: "This bundle does not include the site-level callability needed to explain a missing variant."
@@ -1743,6 +1773,12 @@ PAGE = r'''<!doctype html>
         return {
           title: "Not enough bundle data",
           notice: "No matching variant was found, and this bundle has no callability record for the position, so it remains unresolved."
+        };
+      }
+      if (answerability?.reason === "relevant_analysis_unavailable") {
+        return {
+          title: "Not enough bundle data",
+          notice: "This bundle lists relevant analysis data, but it could not be read well enough to answer this topic."
         };
       }
       return {

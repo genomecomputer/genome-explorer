@@ -91,6 +91,17 @@ class TopicIndexTest(unittest.TestCase):
                 }
             ],
         )
+        self.assertEqual(clopidogrel["answerability"]["state"], "recorded")
+
+        warfarin = by_id["warfarin"]
+        self.assertEqual(
+            warfarin["answerability"]["state"],
+            "analysis_included_no_record",
+        )
+        self.assertEqual(
+            warfarin["answerability"]["included_analyses"],
+            ["pharmacogenomics"],
+        )
 
         cholesterol = by_id["cholesterol"]
         self.assertEqual(
@@ -99,6 +110,7 @@ class TopicIndexTest(unittest.TestCase):
         )
         self.assertTrue(cholesterol["personal"]["has_person_linked_variants"])
         self.assertIn("trait_variants", cholesterol["record_sections"])
+        self.assertEqual(cholesterol["answerability"]["state"], "recorded")
 
         breast_cancer = by_id["breast-cancer"]
         self.assertEqual(
@@ -120,6 +132,14 @@ class TopicIndexTest(unittest.TestCase):
         )
         self.assertNotIn("clinical_findings", by_id["asthma"]["record_sections"])
         self.assertEqual(
+            by_id["asthma"]["answerability"]["state"],
+            "analysis_included_no_record",
+        )
+        self.assertEqual(
+            by_id["lactose-intolerance"]["answerability"]["state"],
+            "analysis_included_no_record",
+        )
+        self.assertEqual(
             by_id["ehlers-danlos-syndrome"]["query"],
             "Ehlers-Danlos",
         )
@@ -131,6 +151,38 @@ class TopicIndexTest(unittest.TestCase):
 
         cache = json.loads((self.workspace / TOPIC_INDEX_FILENAME).read_text())
         self.assertEqual(cache["topics"], topics)
+
+    def test_topic_index_distinguishes_missing_and_unusable_analysis(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            workspace = Path(temporary_directory)
+            variants = workspace / "variants.parquet" / "chrom=chr1"
+            variants.mkdir(parents=True)
+            connection = duckdb.connect()
+            connection.execute(
+                """
+                COPY (
+                    SELECT 'variant-1'::VARCHAR AS variant_id
+                ) TO ? (FORMAT PARQUET)
+                """,
+                [str(variants / "part-0000.parquet")],
+            )
+            connection.close()
+
+            topics = topics_for_workspace(str(workspace))
+            by_id = {topic["id"]: topic for topic in topics}
+
+            self.assertEqual(
+                by_id["warfarin"]["answerability"]["state"],
+                "analysis_not_included",
+            )
+            self.assertEqual(
+                by_id["eye-color"]["answerability"]["state"],
+                "insufficient_bundle_data",
+            )
+            self.assertEqual(
+                by_id["eye-color"]["answerability"]["unavailable_analyses"],
+                ["trait_variants"],
+            )
 
 
 if __name__ == "__main__":
