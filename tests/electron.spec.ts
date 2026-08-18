@@ -237,10 +237,16 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect.poll(() => existsSync(csvExportPath)).toBe(true);
     const jsonExport = JSON.parse(readFileSync(jsonExportPath, "utf8"));
     expect(jsonExport.bundle.nickname).toBe("sample");
-    expect(jsonExport.records).toHaveLength(1);
-    expect(jsonExport.records[0].record.section).toBe("pharmacogenomics");
-    expect(jsonExport.records[0].record.gene_symbol).toBe("CYP2C19");
-    expect(readFileSync(csvExportPath, "utf8")).toContain("record.gene_symbol");
+    expect(jsonExport.bundle).not.toHaveProperty("bundle_id");
+    expect(jsonExport).not.toHaveProperty("format");
+    expect(jsonExport).not.toHaveProperty("version");
+    expect(jsonExport.results).toHaveLength(1);
+    expect(jsonExport.results[0].result_type).toBe("pharmacogenomics");
+    expect(jsonExport.results[0]).not.toHaveProperty("saved_id");
+    expect(jsonExport.results[0].record).not.toHaveProperty("section");
+    expect(jsonExport.results[0].record.gene_symbol).toBe("CYP2C19");
+    expect(readFileSync(csvExportPath, "utf8")).not.toContain("saved_id");
+    expect(readFileSync(csvExportPath, "utf8")).toContain("gene_symbol");
     expect(readFileSync(csvExportPath, "utf8")).toContain("CYP2C19");
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       await firstWindow.screenshot({

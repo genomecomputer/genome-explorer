@@ -25,7 +25,6 @@ SUPPORTED_SECTIONS = {
     "gwas",
 }
 BUNDLE_EXPORT_FIELDS = (
-    "bundle_id",
     "nickname",
     "schema_version",
     "genome_build",
@@ -223,14 +222,25 @@ class SavedResultsStore:
             field: bundle.get(field)
             for field in BUNDLE_EXPORT_FIELDS
         }
+        exported_results = [
+            {
+                "saved_at": entry.get("saved_at"),
+                "search": entry.get("query"),
+                "result_type": entry.get("section"),
+                "record": {
+                    key: value
+                    for key, value in entry.get("record", {}).items()
+                    if key != "section"
+                },
+            }
+            for entry in entries
+        ]
         stem = _export_file_stem(exported_bundle.get("nickname"))
         if format_name == "json":
             content = json.dumps(
                 {
-                    "format": "genome-explorer-saved-results",
-                    "version": SAVED_RESULTS_VERSION,
                     "bundle": exported_bundle,
-                    "records": entries,
+                    "results": exported_results,
                 },
                 indent=2,
                 sort_keys=True,
@@ -246,39 +256,36 @@ class SavedResultsStore:
         record_fields = sorted(
             {
                 key
-                for entry in entries
-                for key in entry.get("record", {}).keys()
-                if key != "section"
+                for result in exported_results
+                for key in result["record"].keys()
             }
         )
         fields = [
-            "bundle_id",
             "bundle_nickname",
             "schema_version",
             "genome_build",
-            "saved_id",
+            "bundle_generated_at",
             "saved_at",
-            "query",
-            "section",
-        ] + ["record." + field for field in record_fields]
+            "search",
+            "result_type",
+        ] + record_fields
         output = io.StringIO(newline="")
         writer = csv.DictWriter(output, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
-        for entry in entries:
-            record = entry.get("record", {})
+        for result in exported_results:
+            record = result["record"]
             row = {
-                "bundle_id": exported_bundle.get("bundle_id"),
                 "bundle_nickname": exported_bundle.get("nickname"),
                 "schema_version": exported_bundle.get("schema_version"),
                 "genome_build": exported_bundle.get("genome_build"),
-                "saved_id": entry.get("saved_id"),
-                "saved_at": entry.get("saved_at"),
-                "query": entry.get("query"),
-                "section": entry.get("section"),
+                "bundle_generated_at": exported_bundle.get("generated_at"),
+                "saved_at": result["saved_at"],
+                "search": result["search"],
+                "result_type": result["result_type"],
             }
             row.update(
                 {
-                    "record." + field: _csv_value(record.get(field))
+                    field: _csv_value(record.get(field))
                     for field in record_fields
                 }
             )

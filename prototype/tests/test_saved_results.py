@@ -48,14 +48,19 @@ class SavedResultsStoreTest(unittest.TestCase):
         self.assertFalse(reloaded.remove("bundle-1", first["saved_id"]))
 
     def test_exports_stable_json_and_csv_from_recorded_fields(self):
-        saved = self.store.add("bundle-1", "clopidogrel", self.record)
+        self.store.add("bundle-1", "clopidogrel", self.record)
 
         json_export = self.store.export("bundle-1", self.bundle, "json")
         self.assertEqual(json_export["file_name"], "synthetic-sample-saved-results.json")
         payload = json.loads(json_export["content"])
         self.assertEqual(payload["bundle"]["schema_version"], "1.1.0")
-        self.assertEqual(payload["records"][0]["saved_id"], saved["saved_id"])
-        self.assertEqual(payload["records"][0]["record"]["gene_symbol"], "CYP2C19")
+        self.assertEqual(payload["results"][0]["result_type"], "pharmacogenomics")
+        self.assertEqual(payload["results"][0]["record"]["gene_symbol"], "CYP2C19")
+        self.assertNotIn("bundle_id", payload["bundle"])
+        self.assertNotIn("format", payload)
+        self.assertNotIn("version", payload)
+        self.assertNotIn("saved_id", payload["results"][0])
+        self.assertNotIn("section", payload["results"][0]["record"])
         self.assertEqual(
             json_export["content"],
             self.store.export("bundle-1", self.bundle, "json")["content"],
@@ -64,12 +69,15 @@ class SavedResultsStoreTest(unittest.TestCase):
         csv_export = self.store.export("bundle-1", self.bundle, "csv")
         self.assertEqual(csv_export["file_name"], "synthetic-sample-saved-results.csv")
         rows = list(csv.DictReader(io.StringIO(csv_export["content"])))
-        self.assertEqual(rows[0]["section"], "pharmacogenomics")
-        self.assertEqual(rows[0]["record.gene_symbol"], "CYP2C19")
+        self.assertEqual(rows[0]["result_type"], "pharmacogenomics")
+        self.assertEqual(rows[0]["gene_symbol"], "CYP2C19")
         self.assertEqual(
-            rows[0]["record.affected_drugs"],
+            rows[0]["affected_drugs"],
             '["clopidogrel","omeprazole"]',
         )
+        self.assertNotIn("bundle_id", rows[0])
+        self.assertNotIn("saved_id", rows[0])
+        self.assertNotIn("section", rows[0])
 
     def test_rejects_unsupported_sections(self):
         with self.assertRaisesRegex(ValueError, "unsupported record section"):
