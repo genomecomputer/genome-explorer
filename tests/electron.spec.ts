@@ -31,11 +31,14 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
 
   const userData = mkdtempSync(path.join(os.tmpdir(), "genome-explorer-electron-"));
   const pidFile = path.join(userData, "engine.pid");
+  const exportDirectory = path.join(userData, "exports");
+  mkdirSync(exportDirectory);
   const environment = {
     ...process.env,
     GENOME_EXPLORER_TEST_BUNDLE: sampleBundle,
     GENOME_EXPLORER_TEST_PID_FILE: pidFile,
     GENOME_EXPLORER_USER_DATA: userData,
+    GENOME_EXPLORER_TEST_EXPORT_DIR: exportDirectory,
   };
   const executablePath = process.env.GENOME_EXPLORER_EXECUTABLE;
   const launchOptions = executablePath
@@ -131,6 +134,13 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(firstWindow.locator(".section-trait_variants .card")).toHaveCount(0);
     await expect(firstPersonalRecord.getByText("G / C")).toBeVisible();
     await firstPersonalRecord.locator(":scope > summary").click();
+    const compactSave = firstPersonalRecord.locator(".save-result-button");
+    await compactSave.click();
+    await expect(compactSave).toHaveText("Saved");
+    await expect(firstWindow.getByRole("button", { name: /Saved results/ })).toContainText("1");
+    await compactSave.click();
+    await expect(compactSave).toHaveText("Save");
+    await expect(firstWindow.getByRole("button", { name: /Saved results/ })).toContainText("0");
     await expect(firstPersonalRecord.getByRole("link", { name: "PubMed 34887591" })).toHaveAttribute(
       "href",
       "https://pubmed.ncbi.nlm.nih.gov/34887591/",
@@ -192,9 +202,35 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(firstWindow.locator("#results")).toHaveAttribute("data-answerability-state", "recorded");
     await expect(firstWindow.locator("#result-meta")).toContainText("Search: CYP2C19");
     await expect(firstWindow.getByText("Person-specific data from this bundle").first()).toBeVisible();
+    const pgxCard = firstWindow.locator(".section-pharmacogenomics .card").first();
+    await pgxCard.getByRole("button", { name: /Save CYP2C19/ }).click();
+    await expect(pgxCard.getByRole("button", { name: /Saved CYP2C19/ })).toBeVisible();
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       await firstWindow.screenshot({
         path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "search-results.png"),
+        fullPage: true,
+      });
+    }
+    await firstWindow.getByRole("button", { name: /Saved results/ }).click();
+    await expect(firstWindow.locator("#view-saved")).toBeVisible();
+    await expect(firstWindow.locator(".saved-result-row")).toHaveCount(1);
+    await expect(firstWindow.locator(".saved-result-row").first()).toContainText("CYP2C19");
+    await firstWindow.getByRole("button", { name: "Export JSON" }).click();
+    await firstWindow.getByRole("button", { name: "Export CSV" }).click();
+    const jsonExportPath = path.join(exportDirectory, "sample-saved-results.json");
+    const csvExportPath = path.join(exportDirectory, "sample-saved-results.csv");
+    await expect.poll(() => existsSync(jsonExportPath)).toBe(true);
+    await expect.poll(() => existsSync(csvExportPath)).toBe(true);
+    const jsonExport = JSON.parse(readFileSync(jsonExportPath, "utf8"));
+    expect(jsonExport.bundle.nickname).toBe("sample");
+    expect(jsonExport.records).toHaveLength(1);
+    expect(jsonExport.records[0].record.section).toBe("pharmacogenomics");
+    expect(jsonExport.records[0].record.gene_symbol).toBe("CYP2C19");
+    expect(readFileSync(csvExportPath, "utf8")).toContain("record.gene_symbol");
+    expect(readFileSync(csvExportPath, "utf8")).toContain("CYP2C19");
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await firstWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "saved-results.png"),
         fullPage: true,
       });
     }
@@ -281,6 +317,19 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await secondWindow.locator(".bundle-open").click();
     await expect(secondWindow.locator("#explorer")).toBeVisible();
     await expect(secondWindow.locator("#validation")).toHaveText("Previously verified");
+    await secondWindow.getByRole("button", { name: /Saved results/ }).click();
+    await expect(secondWindow.locator(".saved-result-row")).toHaveCount(1);
+    const savedRow = secondWindow.locator(".saved-result-row").first();
+    await savedRow.locator(":scope > summary").click();
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await secondWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "saved-results-expanded.png"),
+        fullPage: true,
+      });
+    }
+    await savedRow.getByRole("button", { name: "Remove" }).click();
+    await expect(secondWindow.locator(".saved-result-row")).toHaveCount(0);
+    await expect(secondWindow.getByRole("button", { name: /Saved results/ })).toContainText("0");
 
     const secondEnginePid = Number.parseInt(readFileSync(pidFile, "utf8"), 10);
     await secondApp.close();

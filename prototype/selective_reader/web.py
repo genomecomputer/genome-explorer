@@ -244,13 +244,13 @@ PAGE = r'''<!doctype html>
       display: grid; align-items: center; gap: 14px; padding: 0 15px;
     }
     .record-layout-trait_variants .record-list-head, .record-layout-trait_variants .record-row-summary {
-      grid-template-columns: minmax(100px, .85fr) minmax(82px, .65fr) minmax(90px, .8fr) minmax(210px, 1.7fr) minmax(90px, .72fr) 14px;
+      grid-template-columns: minmax(100px, .85fr) minmax(82px, .65fr) minmax(90px, .8fr) minmax(210px, 1.7fr) minmax(90px, .72fr) minmax(76px, auto);
     }
     .record-layout-variants .record-list-head, .record-layout-variants .record-row-summary {
-      grid-template-columns: minmax(130px, 1.2fr) minmax(90px, .7fr) minmax(100px, .9fr) minmax(105px, .75fr) 14px;
+      grid-template-columns: minmax(130px, 1.2fr) minmax(90px, .7fr) minmax(100px, .9fr) minmax(105px, .75fr) minmax(76px, auto);
     }
     .record-layout-gwas .record-list-head, .record-layout-gwas .record-row-summary {
-      grid-template-columns: minmax(220px, 1.8fr) minmax(110px, .75fr) minmax(120px, 1fr) minmax(105px, .72fr) 14px;
+      grid-template-columns: minmax(220px, 1.8fr) minmax(110px, .75fr) minmax(120px, 1fr) minmax(105px, .72fr) minmax(76px, auto);
     }
     .record-list-head {
       min-height: 39px; color: var(--muted); background: var(--soft); border-bottom: 1px solid var(--line);
@@ -300,6 +300,7 @@ PAGE = r'''<!doctype html>
     .card { padding: 23px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 5px 20px rgba(25,54,43,.045); }
     .record-type { margin-bottom: 8px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
     .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+    .card-heading { min-width: 0; }
     .card h3 { margin: 0; font-size: 20px; letter-spacing: -.025em; }
     .card-id { padding-top: 3px; color: var(--muted); font-size: 12px; }
     .recorded-summary { margin: 12px 0 0; color: #405048; font-size: 15px; line-height: 1.55; }
@@ -331,6 +332,36 @@ PAGE = r'''<!doctype html>
     .technical-details { margin-top: 19px; padding-top: 16px; border-top: 1px solid var(--line); }
     .technical-details summary { color: var(--muted); font-size: 13px; font-weight: 680; cursor: pointer; }
     .technical-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px 20px; margin: 17px 0 0; }
+    .save-result-button {
+      flex: 0 0 auto; min-height: 31px; padding: 0 10px; color: var(--accent-dark); background: white;
+      border: 1px solid #b9cec2; border-radius: 7px; font-size: 11px; font-weight: 740; cursor: pointer;
+    }
+    .save-result-button:hover { background: var(--accent-soft); }
+    .save-result-button[aria-pressed="true"] { color: white; background: var(--accent); border-color: var(--accent); }
+    .save-result-button:disabled { cursor: wait; opacity: .65; }
+    .record-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+    .record-row-actions .save-result-button { min-width: 53px; }
+    .saved-results-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+    .saved-export-actions { display: flex; gap: 8px; padding-bottom: 3px; }
+    .saved-export-actions button { min-height: 36px; }
+    .saved-feedback { min-height: 20px; margin: 10px 0 0; color: var(--muted); font-size: 12px; text-align: right; }
+    .saved-result-list { margin-top: 18px; overflow: hidden; background: white; border: 1px solid var(--line); border-radius: 7px; }
+    .saved-result-row { border-bottom: 1px solid var(--line); }
+    .saved-result-row:last-child { border-bottom: 0; }
+    .saved-result-row > summary {
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, auto) 16px; align-items: center;
+      gap: 16px; min-height: 58px; padding: 10px 16px; list-style: none; cursor: pointer;
+    }
+    .saved-result-row > summary::-webkit-details-marker { display: none; }
+    .saved-result-row > summary:hover, .saved-result-row[open] > summary { background: var(--soft); }
+    .saved-result-title { min-width: 0; font-size: 14px; font-weight: 760; overflow-wrap: anywhere; }
+    .saved-result-kind { color: var(--muted); font-size: 11px; text-align: right; }
+    .saved-result-arrow { color: var(--accent); font-size: 17px; transition: transform .15s ease; }
+    .saved-result-row[open] .saved-result-arrow { transform: rotate(90deg); }
+    .saved-result-details { padding: 17px 16px 19px; background: rgba(247,250,248,.72); border-top: 1px solid var(--line); }
+    .saved-result-context { margin: 0 0 15px; color: var(--muted); font-size: 11px; }
+    .saved-result-actions { display: flex; justify-content: flex-end; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .saved-empty { margin-top: 18px; }
     .empty { padding: 38px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed #cbd8d0; border-radius: 14px; }
     .error { color: #812f2f; background: #fff1f0; border-color: #f0d2cf; }
     .spinner { display: inline-block; width: 15px; height: 15px; margin-right: 7px; vertical-align: -2px; border: 2px solid rgba(255,255,255,.4); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
@@ -356,6 +387,7 @@ PAGE = r'''<!doctype html>
       .record-row-primary { display: block; font-size: 14px; }
       .record-row-primary::before { content: none; }
       .record-row-arrow { grid-column: 2; grid-row: 1; }
+      .record-row-actions { grid-column: 2; grid-row: 1; align-self: start; }
       .record-row-fields { grid-template-columns: 1fr 1fr; }
       .technical-fields { grid-template-columns: 1fr 1fr; }
       .open-card { grid-template-columns: auto 1fr; }
@@ -373,6 +405,13 @@ PAGE = r'''<!doctype html>
       .simple-fields, .technical-fields, .record-row-fields { grid-template-columns: 1fr; }
       .record-row-cell { grid-template-columns: 90px minmax(0, 1fr); }
       .results-head { align-items: flex-start; flex-direction: column; gap: 5px; }
+      .saved-results-head { align-items: flex-start; flex-direction: column; gap: 14px; }
+      .saved-export-actions { width: 100%; }
+      .saved-export-actions button { flex: 1; }
+      .saved-feedback { text-align: left; }
+      .saved-result-row > summary { grid-template-columns: minmax(0, 1fr) 16px; gap: 8px; }
+      .saved-result-kind { grid-column: 1; grid-row: 2; text-align: left; }
+      .saved-result-arrow { grid-column: 2; grid-row: 1; }
       .welcome { padding-top: 52px; }
       .open-card { grid-template-columns: 1fr; }
       .open-icon { width: 46px; height: 46px; }
@@ -431,7 +470,7 @@ PAGE = r'''<!doctype html>
     #explorer h1 { max-width: none; font-size: clamp(34px, 4vw, 48px); letter-spacing: -.045em; }
     #explorer .lede { margin-top: 9px; font-size: 15px; }
     #explorer .eyebrow { margin-bottom: 9px; }
-    .workspace-view.topic-library, .workspace-view.results { margin-top: 0; }
+    .workspace-view.topic-library, .workspace-view.results, .workspace-view.saved-results { margin-top: 0; }
     #explorer .topic-library h1 { font-size: clamp(34px, 4vw, 44px); }
     #explorer .results h1 { font-size: clamp(30px, 3.2vw, 40px); }
     .workspace-back {
@@ -445,7 +484,7 @@ PAGE = r'''<!doctype html>
     .search-button { border-radius: 5px; }
     .featured-search, .example { border-radius: 5px; }
     .secondary-tools { grid-template-columns: 1fr; margin-top: 18px; }
-    .disclosure, .topic-browser, .record-list, .result-disclosure, .card, .open-card, .bundle-item, .trust-item {
+    .disclosure, .topic-browser, .record-list, .result-disclosure, .card, .open-card, .bundle-item, .trust-item, .saved-result-list {
       border-radius: 7px; box-shadow: none;
     }
     .topic-browser { display: block; background: white; }
@@ -499,6 +538,9 @@ PAGE = r'''<!doctype html>
               <span class="sidebar-nav-index">05</span><span>Traits</span><span class="sidebar-nav-count"></span>
             </button>
           </div>
+          <button class="sidebar-nav-button" id="sidebar-saved" type="button">
+            <span class="sidebar-nav-index">06</span><span>Saved results</span><span class="sidebar-nav-count" id="sidebar-saved-count">0</span>
+          </button>
         </nav>
         <div class="sidebar-bundle">
           <p class="sidebar-label">Bundle details</p>
@@ -597,6 +639,21 @@ PAGE = r'''<!doctype html>
         <div class="topic-catalog" id="topic-catalog" role="tabpanel"></div>
       </section>
 
+      <section class="workspace-view saved-results" id="view-saved" aria-labelledby="saved-results-title" hidden>
+        <div class="saved-results-head">
+          <div>
+            <h1 id="saved-results-title">Saved results</h1>
+            <p class="lede">Records bookmarked from this bundle.</p>
+          </div>
+          <div class="saved-export-actions">
+            <button class="text-button" id="export-json" type="button">Export JSON</button>
+            <button class="text-button" id="export-csv" type="button">Export CSV</button>
+          </div>
+        </div>
+        <p class="saved-feedback" id="saved-feedback" aria-live="polite"></p>
+        <div id="saved-results-list"></div>
+      </section>
+
       <section class="workspace-view results" id="results" hidden aria-live="polite">
         <button class="workspace-back" id="results-back" type="button">← Back</button>
         <div class="results-head">
@@ -637,10 +694,17 @@ PAGE = r'''<!doctype html>
     const topicLibraryTitle = document.querySelector("#topic-library-title");
     const topicLibraryLede = document.querySelector("#topic-library-lede");
     const viewSearch = document.querySelector("#view-search");
+    const viewSaved = document.querySelector("#view-saved");
+    const savedResultsList = document.querySelector("#saved-results-list");
+    const savedFeedback = document.querySelector("#saved-feedback");
+    const exportJson = document.querySelector("#export-json");
+    const exportCsv = document.querySelector("#export-csv");
     const resultsBack = document.querySelector("#results-back");
     const sidebarContext = document.querySelector("#sidebar-context");
     const sidebarBundleName = document.querySelector("#sidebar-bundle-name");
     const sidebarSearch = document.querySelector("#sidebar-search");
+    const sidebarSaved = document.querySelector("#sidebar-saved");
+    const sidebarSavedCount = document.querySelector("#sidebar-saved-count");
     const sidebarViewButtons = Array.from(document.querySelectorAll("[data-sidebar-view]"));
     const bundlesButton = document.querySelector("#bundles-button");
     const quitButton = document.querySelector("#quit-button");
@@ -653,6 +717,9 @@ PAGE = r'''<!doctype html>
     let activeDirectoryView = "personal";
     let activeWorkspaceRoute = "search";
     let resultReturnRoute = "search";
+    let savedResults = [];
+    let savedResultIds = new Set();
+    let savedBundleId = "";
 
     const fieldLabels = {
       variant_id: "Variant identifier", rsid: "rsID", chrom: "Chromosome", pos: "Position",
@@ -922,6 +989,10 @@ PAGE = r'''<!doctype html>
       sidebarSearch.classList.toggle("is-active", searchActive);
       if (searchActive) sidebarSearch.setAttribute("aria-current", "page");
       else sidebarSearch.removeAttribute("aria-current");
+      const savedActive = route === "saved" || (route === "results" && resultReturnRoute === "saved");
+      sidebarSaved.classList.toggle("is-active", savedActive);
+      if (savedActive) sidebarSaved.setAttribute("aria-current", "page");
+      else sidebarSaved.removeAttribute("aria-current");
       sidebarViewButtons.forEach(control => {
         const selected = route === control.dataset.sidebarView ||
           (route === "results" && resultReturnRoute === control.dataset.sidebarView);
@@ -931,13 +1002,14 @@ PAGE = r'''<!doctype html>
 
     function showWorkspaceRoute(route, { historyMode = "push", focusSearch = false } = {}) {
       const isDirectoryRoute = Object.hasOwn(directoryViews, route);
-      const resolvedRoute = route === "results" || route === "search" || isDirectoryRoute ? route : "search";
+      const resolvedRoute = route === "results" || route === "search" || route === "saved" || isDirectoryRoute ? route : "search";
       if (Object.hasOwn(directoryViews, resolvedRoute) && activeDirectoryView !== resolvedRoute) {
         activeDirectoryView = resolvedRoute;
         renderTopicCatalog(latestTopics);
       }
       viewSearch.hidden = resolvedRoute !== "search";
       topicLibrary.hidden = !Object.hasOwn(directoryViews, resolvedRoute);
+      viewSaved.hidden = resolvedRoute !== "saved";
       results.hidden = resolvedRoute !== "results";
       activeWorkspaceRoute = resolvedRoute;
       updateSidebarRoute(resolvedRoute);
@@ -952,6 +1024,7 @@ PAGE = r'''<!doctype html>
     }
 
     sidebarSearch.addEventListener("click", () => showWorkspaceRoute("search", { focusSearch: true }));
+    sidebarSaved.addEventListener("click", () => showWorkspaceRoute("saved"));
 
     sidebarViewButtons.forEach(control => {
       control.addEventListener("click", () => showWorkspaceRoute(control.dataset.sidebarView));
@@ -1142,6 +1215,13 @@ PAGE = r'''<!doctype html>
         bundlesButton.disabled = false;
         chooseButton.disabled = false;
         populateBundleStatus(status);
+        if (savedBundleId !== status.active_bundle_id) {
+          savedBundleId = status.active_bundle_id;
+          savedFeedback.textContent = "";
+          setSavedResults([]);
+          sidebarSavedCount.textContent = status.saved_count || 0;
+          loadSavedResults();
+        }
         if (!explorerReady) activeDirectoryView = "personal";
         renderTopicCatalog(status.topics);
         if (!explorerReady) {
@@ -1160,6 +1240,8 @@ PAGE = r'''<!doctype html>
       bundlesButton.hidden = true;
       bundlesButton.disabled = false;
       explorerReady = false;
+      savedBundleId = "";
+      setSavedResults([]);
       if (status.status === "choosing") {
         chooseButton.disabled = true;
         chooseButton.textContent = "Waiting for selection";
@@ -1235,6 +1317,176 @@ PAGE = r'''<!doctype html>
       if (hit.section === "genes") return "Personal variant records found";
       return hit.rsid ? `Identifier: ${hit.rsid}` : "";
     }
+
+    function recordForSave(hit) {
+      return Object.fromEntries(
+        Object.entries(hit).filter(([key]) => !key.startsWith("_"))
+      );
+    }
+
+    function updateSaveButtons() {
+      document.querySelectorAll(".save-result-button").forEach(control => {
+        const saved = savedResultIds.has(control.dataset.recordKey);
+        const title = control.dataset.recordTitle || "result";
+        control.setAttribute("aria-pressed", String(saved));
+        control.setAttribute("aria-label", `${saved ? "Saved" : "Save"} ${title}`);
+        control.textContent = saved ? "Saved" : "Save";
+      });
+    }
+
+    function setSavedResults(records) {
+      savedResults = Array.isArray(records) ? records : [];
+      savedResultIds = new Set(savedResults.map(entry => entry.saved_id));
+      sidebarSavedCount.textContent = savedResults.length;
+      renderSavedResults();
+      updateSaveButtons();
+    }
+
+    async function toggleSavedResult(hit, query, control) {
+      const recordKey = hit._record_key;
+      if (!recordKey) return;
+      control.disabled = true;
+      try {
+        const payload = savedResultIds.has(recordKey)
+          ? await postJson("/api/saved/remove", { saved_id: recordKey })
+          : await postJson("/api/saved/add", { query, record: recordForSave(hit) });
+        setSavedResults(payload.records);
+      } catch (error) {
+        control.title = error.message || "This result could not be saved.";
+      } finally {
+        control.disabled = false;
+      }
+    }
+
+    function saveButtonFor(hit, query) {
+      const control = document.createElement("button");
+      control.className = "save-result-button";
+      control.type = "button";
+      control.dataset.recordKey = hit._record_key || "";
+      control.dataset.recordTitle = titleFor(hit, query) || "result";
+      control.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleSavedResult(hit, query, control);
+      });
+      const saved = savedResultIds.has(control.dataset.recordKey);
+      control.setAttribute("aria-pressed", String(saved));
+      control.setAttribute("aria-label", `${saved ? "Saved" : "Save"} ${control.dataset.recordTitle}`);
+      control.textContent = saved ? "Saved" : "Save";
+      return control;
+    }
+
+    function savedResultRow(entry) {
+      const record = entry.record || {};
+      const row = document.createElement("details");
+      row.className = "saved-result-row";
+      const summary = document.createElement("summary");
+      const title = document.createElement("span");
+      title.className = "saved-result-title";
+      title.textContent = titleFor(record, entry.query) || "Saved result";
+      const kind = document.createElement("span");
+      kind.className = "saved-result-kind";
+      kind.textContent = sectionLabels[entry.section] || formatValue(entry.section);
+      const arrow = document.createElement("span");
+      arrow.className = "saved-result-arrow";
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = "›";
+      summary.append(title, kind, arrow);
+
+      const details = document.createElement("div");
+      details.className = "saved-result-details";
+      const context = document.createElement("p");
+      context.className = "saved-result-context";
+      context.textContent = `Saved from search: ${entry.query} · ${formatBundleDate(entry.saved_at)}`;
+      const fields = document.createElement("dl");
+      fields.className = "technical-fields";
+      const preferredFields = {
+        clinical_findings: ["classification", "called_alleles", "gene_symbol", "call_confidence", "review_status"],
+        pharmacogenomics: ["diplotype", "phenotype", "gene_symbol", "activity_score", "copy_number", "cpic_level", "affected_drugs", "guideline_url"],
+        polygenic_scores: ["percentile", "reference_population", "trait", "score_value", "training_source", "training_date"],
+        trait_variants: ["called_alleles", "gene", "matched_traits", "call_confidence", "rsid", "variant_id", "study_pmids"],
+        genes: ["gene_symbol", "variant_count", "actionable_count", "chrom", "start_pos", "end_pos"],
+        variants: ["zygosity", "gene", "call_confidence", "rsid", "variant_id", "chrom", "pos", "ref", "alt"],
+        gwas: ["trait", "rsid", "gene", "source", "study_pmids", "study_accession"]
+      };
+      const orderedKeys = [
+        ...(preferredFields[entry.section] || []),
+        ...Object.keys(record).filter(key => !(preferredFields[entry.section] || []).includes(key))
+      ];
+      [...new Set(orderedKeys)].forEach(key => {
+        const value = record[key];
+        if (key === "section" || key.startsWith("_") || value === null || value === undefined || value === "") return;
+        fields.append(fieldElement(key, value, entry.section));
+      });
+      const actions = document.createElement("div");
+      actions.className = "saved-result-actions";
+      const remove = document.createElement("button");
+      remove.className = "text-button";
+      remove.type = "button";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", async () => {
+        remove.disabled = true;
+        try {
+          const payload = await postJson("/api/saved/remove", { saved_id: entry.saved_id });
+          setSavedResults(payload.records);
+        } catch (error) {
+          savedFeedback.textContent = error.message || "This saved result could not be removed.";
+          remove.disabled = false;
+        }
+      });
+      actions.append(remove);
+      details.append(context, fields, actions);
+      row.append(summary, details);
+      return row;
+    }
+
+    function renderSavedResults() {
+      exportJson.disabled = savedResults.length === 0;
+      exportCsv.disabled = savedResults.length === 0;
+      savedResultsList.replaceChildren();
+      if (!savedResults.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty saved-empty";
+        empty.textContent = "Save a result from any search to keep it here.";
+        savedResultsList.append(empty);
+        return;
+      }
+      const list = document.createElement("div");
+      list.className = "saved-result-list";
+      savedResults.forEach(entry => list.append(savedResultRow(entry)));
+      savedResultsList.append(list);
+    }
+
+    async function loadSavedResults() {
+      try {
+        const response = await fetch(`${basePath}/api/saved`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Saved results could not be loaded.");
+        if (payload.bundle_id !== savedBundleId) return;
+        setSavedResults(payload.records);
+      } catch (error) {
+        savedFeedback.textContent = error.message || "Saved results could not be loaded.";
+      }
+    }
+
+    async function exportSavedResults(format, control) {
+      if (!desktop || !savedResults.length) return;
+      savedFeedback.textContent = "";
+      control.disabled = true;
+      try {
+        const result = await window.genomeExplorer.exportSaved(format);
+        if (result.saved) savedFeedback.textContent = `Exported ${result.file_name}.`;
+      } catch (error) {
+        savedFeedback.textContent = error.message || "Saved results could not be exported.";
+      } finally {
+        control.disabled = false;
+      }
+    }
+
+    exportJson.hidden = !desktop;
+    exportCsv.hidden = !desktop;
+    exportJson.addEventListener("click", () => exportSavedResults("json", exportJson));
+    exportCsv.addEventListener("click", () => exportSavedResults("csv", exportCsv));
 
     function summaryFor(hit, query) {
       if (hit.section === "pharmacogenomics") {
@@ -1468,13 +1720,16 @@ PAGE = r'''<!doctype html>
 
       const top = document.createElement("div");
       top.className = "card-top";
+      const heading = document.createElement("div");
+      heading.className = "card-heading";
       const title = document.createElement("h3");
       title.textContent = titleFor(hit, query);
       const subtitle = document.createElement("div");
       subtitle.className = "card-id";
       subtitle.textContent = subtitleFor(hit, query);
-      top.append(title);
-      if (!compact && subtitle.textContent) top.append(subtitle);
+      heading.append(title);
+      if (!compact && subtitle.textContent) heading.append(subtitle);
+      top.append(heading, saveButtonFor(hit, query));
       card.append(top);
 
       if (!compact) {
@@ -1524,7 +1779,7 @@ PAGE = r'''<!doctype html>
       fields.className = "technical-fields";
       const alreadyShown = new Set(primaryFields[hit.section] || []);
       Object.entries(hit).forEach(([key, value]) => {
-        if (key === "section" || value === null || value === undefined || value === "") return;
+        if (key === "section" || key.startsWith("_") || value === null || value === undefined || value === "") return;
         if (hit.section === "clinical_findings" && [
           "condition", "classification", "called_alleles", "gene_symbol", "call_confidence",
           "clinvar_has_conflicts", "clinvar_conflict_summary", "clinvar_review_stars",
@@ -1595,7 +1850,7 @@ PAGE = r'''<!doctype html>
       ];
     }
 
-    function recordRowFor(hit) {
+    function recordRowFor(hit, query) {
       const row = document.createElement("details");
       row.className = "record-row";
       const summary = document.createElement("summary");
@@ -1612,11 +1867,14 @@ PAGE = r'''<!doctype html>
         cell.append(value);
         summary.append(cell);
       });
+      const actions = document.createElement("span");
+      actions.className = "record-row-actions";
       const arrow = document.createElement("span");
       arrow.className = "record-row-arrow";
       arrow.setAttribute("aria-hidden", "true");
       arrow.textContent = "›";
-      summary.append(arrow);
+      actions.append(saveButtonFor(hit, query), arrow);
+      summary.append(actions);
 
       const details = document.createElement("div");
       details.className = "record-row-details";
@@ -1624,7 +1882,7 @@ PAGE = r'''<!doctype html>
       fields.className = "record-row-fields";
       const shownKeys = new Set(columns.map(column => column.key));
       Object.entries(hit).forEach(([key, value]) => {
-        if (key === "section" || shownKeys.has(key) || value === null || value === undefined || value === "") return;
+        if (key === "section" || key.startsWith("_") || shownKeys.has(key) || value === null || value === undefined || value === "") return;
         fields.append(fieldElement(key, value, hit.section));
       });
       details.append(fields);
@@ -1632,7 +1890,7 @@ PAGE = r'''<!doctype html>
       return row;
     }
 
-    function recordListFor(hits, sectionName) {
+    function recordListFor(hits, query, sectionName) {
       const list = document.createElement("div");
       list.className = `record-list record-layout-${sectionName}`;
       const head = document.createElement("div");
@@ -1644,13 +1902,13 @@ PAGE = r'''<!doctype html>
         head.append(label);
       });
       head.append(document.createElement("span"));
-      list.append(head, ...hits.map(recordRowFor));
+      list.append(head, ...hits.map(hit => recordRowFor(hit, query)));
       return list;
     }
 
     function recordsFor(hits, query, sectionName) {
       return compactRecordSections.has(sectionName)
-        ? recordListFor(hits, sectionName)
+        ? recordListFor(hits, query, sectionName)
         : cardsFor(hits, query);
     }
 

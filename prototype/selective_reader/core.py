@@ -1144,6 +1144,10 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
         hits,
         coordinate,
     )
+    from .saved_results import saved_result_id
+
+    for hit in hits:
+        hit["_record_key"] = saved_result_id(hit)
     connection.close()
     return SearchResult(
         query=normalized_query,

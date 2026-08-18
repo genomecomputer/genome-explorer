@@ -11,11 +11,12 @@ from urllib.parse import urlsplit
 
 from .bundle_library import BundleLibrary
 from .core import WorkspaceReport, json_ready, open_bundle, search_workspace
+from .saved_results import SavedResultsStore
 from .topics import topics_for_workspace
 from .web import PAGE
 
 
-MAX_REQUEST_BYTES = 4096
+MAX_REQUEST_BYTES = 256 * 1024
 MAX_QUERY_CHARACTERS = 200
 ArchiveChooser = Callable[[], Optional[str]]
 
@@ -38,6 +39,11 @@ class LocalExplorerServer(ThreadingHTTPServer):
         self.force_validate = force_validate
         self.library = (
             BundleLibrary(workspace_root.parent / "bundle-library.json")
+            if workspace_root is not None
+            else None
+        )
+        self.saved_results = (
+            SavedResultsStore(workspace_root.parent / "saved-results.json")
             if workspace_root is not None
             else None
         )
@@ -83,6 +89,11 @@ class LocalExplorerServer(ThreadingHTTPServer):
         if error:
             payload["error"] = error
         if status == "ready" and report is not None:
+            saved_count = (
+                len(self.saved_results.entries(active_bundle_id))
+                if self.saved_results is not None and active_bundle_id
+                else 0
+            )
             payload.update(
                 {
                     "schema_version": report.schema_version,
@@ -96,6 +107,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
                     "validated_at": report.validated_at,
                     "active_bundle_id": active_bundle_id,
                     "active_nickname": active_nickname,
+                    "saved_count": saved_count,
                 }
             )
         return payload
@@ -184,6 +196,54 @@ class LocalExplorerServer(ThreadingHTTPServer):
         with self.state_lock:
             if self.active_bundle_id == bundle_id:
                 self.active_nickname = entry.nickname
+
+    def _selected_bundle_id(self) -> str:
+        with self.state_lock:
+            if self.state_status != "ready" or not self.active_bundle_id:
+                raise ValueError("choose and verify a bundle first")
+            return self.active_bundle_id
+
+    def saved_payload(self) -> Dict[str, Any]:
+        if self.saved_results is None:
+            raise ValueError("saved results are unavailable")
+        bundle_id = self._selected_bundle_id()
+        return {
+            "bundle_id": bundle_id,
+            "records": self.saved_results.entries(bundle_id),
+        }
+
+    def save_record(self, query: str, record: Dict[str, Any]) -> Dict[str, Any]:
+        if self.saved_results is None:
+            raise ValueError("saved results are unavailable")
+        bundle_id = self._selected_bundle_id()
+        self.saved_results.add(bundle_id, query, record)
+        return self.saved_payload()
+
+    def remove_saved_record(self, saved_id: str) -> Dict[str, Any]:
+        if self.saved_results is None:
+            raise ValueError("saved results are unavailable")
+        bundle_id = self._selected_bundle_id()
+        self.saved_results.remove(bundle_id, saved_id)
+        return self.saved_payload()
+
+    def export_saved_records(self, format_name: str) -> Dict[str, str]:
+        if self.saved_results is None or self.library is None:
+            raise ValueError("saved results are unavailable")
+        bundle_id = self._selected_bundle_id()
+        entry = self.library.find(bundle_id)
+        if entry is None:
+            raise ValueError("bundle was not found")
+        return self.saved_results.export(
+            bundle_id,
+            {
+                "bundle_id": entry.bundle_id,
+                "nickname": entry.nickname,
+                "schema_version": entry.schema_version,
+                "genome_build": entry.genome_build,
+                "generated_at": entry.generated_at,
+            },
+            format_name,
+        )
 
     def _accept_report(self, report: WorkspaceReport) -> None:
         bundle_id = ""
@@ -338,6 +398,12 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
         if path == self.server.base_path + "/api/status":
             self._send_json(200, self.server.status_payload())
             return
+        if path == self.server.base_path + "/api/saved":
+            try:
+                self._send_json(200, self.server.saved_payload())
+            except ValueError as error:
+                self._send_json(409, {"error": str(error)})
+            return
         self._reject()
 
     def do_POST(self) -> None:
@@ -405,6 +471,44 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
                     raise ValueError("nickname request is invalid")
                 self.server.rename_bundle(bundle_id, nickname)
                 self._send_json(200, self.server.status_payload())
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            return
+        if path == self.server.base_path + "/api/saved/add":
+            try:
+                payload = self._read_json_body()
+                query = payload.get("query")
+                record = payload.get("record")
+                if not isinstance(query, str) or not isinstance(record, dict):
+                    raise ValueError("saved result request is invalid")
+                self._send_json(200, self.server.save_record(query, record))
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            return
+        if path == self.server.base_path + "/api/saved/remove":
+            try:
+                payload = self._read_json_body()
+                saved_id = payload.get("saved_id")
+                if not isinstance(saved_id, str) or not saved_id:
+                    raise ValueError("saved result request is invalid")
+                self._send_json(200, self.server.remove_saved_record(saved_id))
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            return
+        if path == self.server.base_path + "/api/saved/export":
+            supplied_token = self.headers.get("X-Genome-Explorer-Desktop", "")
+            if not secrets.compare_digest(supplied_token, self.server.desktop_token):
+                self._reject(403)
+                return
+            try:
+                payload = self._read_json_body()
+                format_name = payload.get("format")
+                if not isinstance(format_name, str):
+                    raise ValueError("export format is invalid")
+                self._send_json(
+                    200,
+                    self.server.export_saved_records(format_name),
+                )
             except (ValueError, json.JSONDecodeError) as error:
                 self._send_json(400, {"error": str(error)})
             return

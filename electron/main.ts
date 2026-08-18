@@ -10,7 +10,7 @@ import {
   shell,
 } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 
@@ -199,6 +199,49 @@ async function chooseBundle(): Promise<Record<string, unknown>> {
   });
 }
 
+async function exportSavedResults(format: "json" | "csv"): Promise<Record<string, unknown>> {
+  if (!mainWindow) throw new Error("The Genome Explorer window is unavailable.");
+  const exported = await backendRequest("api/saved/export", {
+    method: "POST",
+    payload: { format },
+    desktop: true,
+  });
+  const fileName = exported.file_name;
+  const content = exported.content;
+  if (
+    typeof fileName !== "string" ||
+    path.basename(fileName) !== fileName ||
+    typeof content !== "string"
+  ) {
+    throw new Error("The saved results export is invalid.");
+  }
+
+  let filePath: string | undefined;
+  if (process.env.GENOME_EXPLORER_TEST_EXPORT_DIR) {
+    const exportDirectory = path.resolve(process.env.GENOME_EXPLORER_TEST_EXPORT_DIR);
+    mkdirSync(exportDirectory, { recursive: true });
+    filePath = path.join(exportDirectory, fileName);
+  } else {
+    const extension = format === "json" ? "json" : "csv";
+    const selection = await dialog.showSaveDialog(mainWindow, {
+      title: `Export saved results as ${extension.toUpperCase()}`,
+      buttonLabel: "Export",
+      defaultPath: path.join(app.getPath("documents"), fileName),
+      filters: [
+        {
+          name: format === "json" ? "JSON files" : "CSV files",
+          extensions: [extension],
+        },
+      ],
+    });
+    if (!selection.canceled) filePath = selection.filePath;
+  }
+
+  if (!filePath) return { saved: false };
+  writeFileSync(filePath, content, { encoding: "utf8", mode: 0o600 });
+  return { saved: true, file_name: path.basename(filePath) };
+}
+
 function installMenu(): void {
   const template: MenuItemConstructorOptions[] = [];
   if (process.platform === "darwin") {
@@ -346,6 +389,13 @@ if (!singleInstance) {
     ipcMain.handle("genome:choose-bundle", async (event) => {
       assertTrustedSender(event.senderFrame?.url ?? "");
       return chooseBundle();
+    });
+    ipcMain.handle("genome:export-saved", async (event, format: unknown) => {
+      assertTrustedSender(event.senderFrame?.url ?? "");
+      if (format !== "json" && format !== "csv") {
+        throw new Error("The export format is invalid.");
+      }
+      return exportSavedResults(format);
     });
     ipcMain.handle("app:quit", (event) => {
       assertTrustedSender(event.senderFrame?.url ?? "");
