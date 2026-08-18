@@ -15,9 +15,9 @@ from .core import (
     json_ready,
     open_bundle,
     search_workspace,
-    variants_for_region,
 )
 from .genome_map import genome_map_for_workspace
+from .region_browser import region_browser_for_workspace
 from .saved_results import SavedResultsStore
 from .topics import topics_for_workspace
 from .web import PAGE
@@ -141,28 +141,27 @@ class LocalExplorerServer(ThreadingHTTPServer):
                 self.genome_map_cache[report.workspace] = cached
             return cached
 
-    def genome_map_region_payload(
+    def region_browser_payload(
         self,
-        chrom: str,
-        start: int,
-        end: int,
-        page: int,
+        *,
+        query: Optional[str] = None,
+        chrom: Optional[str] = None,
+        start: Optional[int] = None,
+        end: Optional[int] = None,
+        page: int = 1,
     ) -> Dict[str, Any]:
         report = self.ready_report()
         if report is None:
             raise ValueError("choose and verify a bundle first")
-        genome_map = self.genome_map_payload()
-        is_map_region = any(
-            chromosome.get("chrom") == chrom
-            and any(
-                bin_row.get("start") == start and bin_row.get("end") == end
-                for bin_row in chromosome.get("bins", [])
-            )
-            for chromosome in genome_map.get("chromosomes", [])
+        return region_browser_for_workspace(
+            report.workspace,
+            report.genome_build,
+            query=query,
+            chrom=chrom,
+            start=start,
+            end=end,
+            page=page,
         )
-        if not is_map_region:
-            raise ValueError("genome map region is invalid")
-        return variants_for_region(report.workspace, chrom, start, end, page=page)
 
     def begin_selection(self) -> bool:
         with self.state_lock:
@@ -456,7 +455,7 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
             except ValueError as error:
                 self._send_json(409, {"error": str(error)})
             except Exception:
-                self._send_json(500, {"error": "genome map could not be prepared"})
+                self._send_json(500, {"error": "coverage summary could not be prepared"})
             return
         self._reject()
 
@@ -566,30 +565,48 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
             except (ValueError, json.JSONDecodeError) as error:
                 self._send_json(400, {"error": str(error)})
             return
-        if path == self.server.base_path + "/api/genome-map/region":
+        if path == self.server.base_path + "/api/region-browser":
             try:
                 payload = self._read_json_body()
+                query = payload.get("query")
                 chrom = payload.get("chrom")
                 start = payload.get("start")
                 end = payload.get("end")
                 page = payload.get("page", 1)
-                integers = (start, end, page)
-                if (
-                    not isinstance(chrom, str)
-                    or not all(
-                        isinstance(value, int) and not isinstance(value, bool)
-                        for value in integers
+                if not isinstance(page, int) or isinstance(page, bool) or page < 1:
+                    raise ValueError("region browser page is invalid")
+                if query is not None:
+                    if (
+                        not isinstance(query, str)
+                        or len(query) > MAX_QUERY_CHARACTERS
+                        or any(value is not None for value in (chrom, start, end))
+                    ):
+                        raise ValueError("region browser query is invalid")
+                    result = self.server.region_browser_payload(
+                        query=query,
+                        page=page,
                     )
-                ):
-                    raise ValueError("genome map region request is invalid")
-                self._send_json(
-                    200,
-                    self.server.genome_map_region_payload(chrom, start, end, page),
-                )
+                else:
+                    integers = (start, end)
+                    if (
+                        not isinstance(chrom, str)
+                        or not all(
+                            isinstance(value, int) and not isinstance(value, bool)
+                            for value in integers
+                        )
+                    ):
+                        raise ValueError("region browser request is invalid")
+                    result = self.server.region_browser_payload(
+                        chrom=chrom,
+                        start=start,
+                        end=end,
+                        page=page,
+                    )
+                self._send_json(200, result)
             except (ValueError, json.JSONDecodeError) as error:
                 self._send_json(400, {"error": str(error)})
             except Exception:
-                self._send_json(500, {"error": "genome map region could not be loaded"})
+                self._send_json(500, {"error": "region browser could not be loaded"})
             return
         if path != self.server.base_path + "/api/search":
             self._reject()

@@ -825,9 +825,9 @@ def variants_for_region(
 ) -> Dict[str, Any]:
     """Return one stable, bounded page of person-specific variant rows."""
     if not chrom or start < 1 or end < start:
-        raise ValueError("genome map region is invalid")
+        raise ValueError("region browser locus is invalid")
     if page < 1 or page_size < 1 or page_size > 100:
-        raise ValueError("genome map page is invalid")
+        raise ValueError("region browser page is invalid")
 
     workspace = Path(workspace_path).resolve()
     variants = workspace / "variants.parquet"
@@ -855,7 +855,7 @@ def variants_for_region(
         )
         page_count = max(1, math.ceil(total / page_size))
         if total and page > page_count:
-            raise ValueError("genome map page is outside the selected region")
+            raise ValueError("region browser page is outside the selected locus")
         offset = (page - 1) * page_size
         cursor = connection.execute(
             "SELECT %s FROM variants WHERE %s "

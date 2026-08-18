@@ -372,45 +372,75 @@ PAGE = r'''<!doctype html>
     .map-stat + .map-stat { border-left: 1px solid var(--line); }
     .map-stat span { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .map-stat strong { display: block; margin-top: 5px; font-size: 14px; font-weight: 760; }
-    .map-explanation { display: flex; align-items: center; gap: 9px; margin: 17px 0 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
-    .density-key { flex: 0 0 auto; width: 28px; height: 8px; background: linear-gradient(90deg, #d9ebe2, var(--accent)); border-radius: 999px; }
-    .map-callability-key { display: inline-flex; align-items: center; gap: 6px; margin-left: 5px; }
-    .callability-key-bar { width: 28px; height: 3px; background: #6e9db7; border-radius: 999px; }
-    .chromosome-map { overflow: hidden; background: white; border: 1px solid var(--line); border-radius: 7px; }
-    .chromosome-row {
-      display: grid; grid-template-columns: 40px minmax(260px, 1fr) 105px; align-items: center; gap: 14px;
-      min-height: 42px; padding: 7px 14px; border-bottom: 1px solid #e7ede9;
-    }
-    .chromosome-row:last-child { border-bottom: 0; }
-    .chromosome-name { font-size: 12px; font-weight: 790; }
-    .chromosome-track-shell { position: relative; display: flex; align-items: center; min-width: 0; height: 19px; }
-    .chromosome-track {
-      display: flex; height: 14px; min-width: 4%; overflow: hidden; background: #edf2ef;
-      border: 1px solid #d9e3dd; border-radius: 999px;
-    }
-    .density-bin { position: relative; flex: 1 1 0; min-width: 2px; padding: 0; overflow: hidden; background: rgba(23,107,77,var(--density)); border: 0; border-right: 1px solid rgba(255,255,255,.32); cursor: pointer; }
-    .density-bin.has-coverage::after {
-      content: ""; position: absolute; left: 0; bottom: 0; width: calc(var(--callable) * 100%); height: 3px;
-      background: #5f91ad;
-    }
-    .density-bin:last-child { border-right: 0; }
-    .density-bin:hover:not(:disabled), .density-bin:focus-visible { outline: 2px solid var(--accent-dark); outline-offset: -2px; }
-    .density-bin:disabled { cursor: default; }
-    .chromosome-count { color: var(--muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
-    .map-table-disclosure { margin-top: 14px; background: transparent; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-    .map-table-disclosure > summary { padding: 13px 2px; color: var(--accent-dark); font-size: 12px; font-weight: 740; cursor: pointer; }
     .map-table-wrap { overflow-x: auto; padding-bottom: 10px; }
     .map-table { width: 100%; border-collapse: collapse; background: white; font-size: 12px; }
     .map-table th, .map-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; }
     .map-table th { color: var(--muted); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
-    .map-region-browser { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
-    .map-region-head { display: flex; align-items: start; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
-    .map-region-head h2 { margin: 0; font-size: 17px; }
-    .map-region-summary { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
-    .map-region-close { flex: 0 0 auto; padding: 5px 0; color: var(--accent-dark); background: none; border: 0; font-size: 12px; font-weight: 740; cursor: pointer; }
-    .map-region-close:hover { text-decoration: underline; text-underline-offset: 3px; }
-    .map-region-pagination { margin-top: 10px; }
-    .map-loading { margin-top: 20px; }
+    .region-browser-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+    .region-search {
+      display: flex; gap: 7px; margin-top: 24px; padding: 6px; background: white;
+      border: 1px solid #cbd9d1; border-radius: 8px;
+    }
+    .region-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; }
+    .region-examples { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 10px; color: var(--muted); font-size: 11px; }
+    .region-examples button {
+      padding: 5px 8px; color: var(--accent-dark); background: transparent; border: 1px solid #c8d8cf;
+      border-radius: 999px; font-size: 11px; cursor: pointer;
+    }
+    .region-examples button:hover { background: var(--accent-soft); }
+    .region-browser-status { margin-top: 25px; }
+    .region-browser-workspace { margin-top: 28px; }
+    .region-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+    .region-toolbar h2 { margin: 0; font-size: 22px; }
+    .region-coordinate { margin: 5px 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .region-controls { display: flex; gap: 6px; }
+    .region-controls button {
+      min-height: 34px; padding: 0 10px; color: var(--accent-dark); background: white; border: 1px solid #c8d8cf;
+      border-radius: 5px; font-size: 11px; font-weight: 720; cursor: pointer;
+    }
+    .region-controls button:hover:not(:disabled) { background: var(--accent-soft); }
+    .region-controls button:disabled { cursor: default; opacity: .45; }
+    .region-ruler {
+      position: relative; display: flex; justify-content: space-between; min-height: 38px; margin: 20px 0 0 174px;
+      color: var(--muted); border-top: 1px solid #96aa9f; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px;
+    }
+    .region-ruler-tick { position: relative; padding-top: 8px; transform: translateX(-50%); }
+    .region-ruler-tick::before { content: ""; position: absolute; top: -1px; left: 50%; width: 1px; height: 5px; background: #96aa9f; }
+    .region-ruler-tick:first-child { transform: none; }
+    .region-ruler-tick:first-child::before { left: 0; }
+    .region-ruler-tick:last-child { transform: translateX(0); }
+    .region-ruler-tick:last-child::before { left: 100%; }
+    .region-tracks { overflow: hidden; background: white; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .region-track-row { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 14px; min-height: 68px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    .region-track-row:last-child { border-bottom: 0; }
+    .region-track-label { padding-top: 4px; }
+    .region-track-label strong { display: block; font-size: 11px; }
+    .region-track-label span { display: block; margin-top: 5px; color: var(--muted); font-size: 9px; line-height: 1.35; }
+    .region-track { position: relative; align-self: center; height: 42px; overflow: hidden; background: linear-gradient(to bottom, transparent 20px, #e6ede9 20px, #e6ede9 21px, transparent 21px); }
+    .region-gene-feature {
+      position: absolute; top: 13px; min-width: 3px; height: 16px; padding: 1px 5px; overflow: hidden;
+      color: #184b37; background: #cfe6da; border: 1px solid #8fbca6; border-radius: 3px;
+      font-size: 8px; font-weight: 760; white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
+    }
+    .region-annotation-point {
+      position: absolute; top: 11px; width: 9px; height: 20px; margin-left: -4px; padding: 0;
+      background: #b16f33; border: 2px solid white; border-radius: 999px; box-shadow: 0 0 0 1px #8f5727; cursor: pointer;
+    }
+    .region-density-track, .region-callability-track { display: flex; align-items: flex-end; gap: 1px; padding: 4px 0; background: none; }
+    .region-variant-bin { flex: 1 1 0; min-width: 1px; height: calc(var(--height) * 30px); min-height: 1px; padding: 0; background: #368365; border: 0; border-radius: 1px 1px 0 0; cursor: pointer; }
+    .region-variant-bin:disabled { cursor: default; opacity: .2; }
+    .region-variant-bin:hover:not(:disabled), .region-variant-bin:focus-visible { outline: 2px solid var(--accent-dark); outline-offset: -2px; }
+    .region-callability-bin { flex: 1 1 0; min-width: 1px; height: 12px; background: rgba(95,145,173,var(--coverage)); border-radius: 1px; }
+    .region-callability-bin.site-bin { height: calc(var(--height) * 22px); min-height: 1px; background: #6e9db7; }
+    .region-track-empty { display: flex; align-items: center; height: 100%; color: var(--muted); font-size: 10px; }
+    .region-track-note { margin: 10px 0 0 174px; color: var(--muted); font-size: 10px; }
+    .region-records { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }
+    .region-records-head { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
+    .region-records-head h2 { margin: 0; font-size: 17px; }
+    .region-records-head span { color: var(--muted); font-size: 11px; }
+    .coverage-explanation { margin: 15px 0; color: var(--muted); font-size: 12px; }
+    .coverage-table-wrap { padding: 0; border: 1px solid var(--line); border-radius: 7px; }
+    .coverage-table-wrap .map-table tr:last-child td { border-bottom: 0; }
     .empty { padding: 38px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed #cbd8d0; border-radius: 14px; }
     .error { color: #812f2f; background: #fff1f0; border-color: #f0d2cf; }
     .spinner { display: inline-block; width: 15px; height: 15px; margin-right: 7px; vertical-align: -2px; border: 2px solid rgba(255,255,255,.4); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
@@ -444,6 +474,12 @@ PAGE = r'''<!doctype html>
       .trust-grid { grid-template-columns: 1fr; }
       .bundle-item { grid-template-columns: auto minmax(0, 1fr); }
       .bundle-actions { grid-column: 1 / -1; justify-content: flex-end; }
+      .region-toolbar { align-items: flex-start; flex-direction: column; gap: 13px; }
+      .region-ruler { margin-left: 0; }
+      .region-track-row { grid-template-columns: 1fr; gap: 5px; }
+      .region-track-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+      .region-track-label span { margin-top: 0; text-align: right; }
+      .region-track-note { margin-left: 0; }
     }
     @media (max-width: 480px) {
       h1 { font-size: 40px; }
@@ -478,6 +514,11 @@ PAGE = r'''<!doctype html>
       .directory-row { grid-template-columns: minmax(0, 1fr) 22px; gap: 8px; }
       .directory-row .topic-indicator { grid-column: 1 / -1; grid-row: 2; text-align: left; }
       .directory-arrow { grid-column: 2; grid-row: 1; }
+      .region-search { align-items: stretch; flex-direction: column; }
+      .region-search .search-button { min-height: 42px; }
+      .region-controls { width: 100%; }
+      .region-controls button { flex: 1; padding: 0 6px; }
+      .region-records-head { align-items: flex-start; flex-direction: column; gap: 4px; }
     }
 
     /* Workbench layout. */
@@ -499,6 +540,11 @@ PAGE = r'''<!doctype html>
     .sidebar-bundle-name { display: block; color: white; font-size: 15px; font-weight: 760; line-height: 1.3; overflow-wrap: anywhere; }
     .sidebar-bundle-status { display: block; margin-top: 7px; color: #a9d3bf; font-size: 10px; font-weight: 720; }
     .sidebar-bundle-meta { display: block; margin-top: 6px; color: #b9d2c6; font-size: 11px; line-height: 1.45; }
+    .sidebar-bundle-link {
+      margin-top: 11px; padding: 0; color: #c9ddd3; background: transparent; border: 0;
+      font-size: 11px; font-weight: 720; text-align: left; cursor: pointer;
+    }
+    .sidebar-bundle-link:hover, .sidebar-bundle-link.is-active { color: white; text-decoration: underline; text-underline-offset: 3px; }
     .sidebar-nav { display: grid; gap: 3px; margin-top: 23px; }
     .sidebar-view-list { display: grid; gap: 3px; }
     .sidebar-nav .sidebar-label { margin: 0 9px 7px; }
@@ -523,7 +569,7 @@ PAGE = r'''<!doctype html>
     #explorer h1 { max-width: none; font-size: clamp(34px, 4vw, 48px); letter-spacing: -.045em; }
     #explorer .lede { margin-top: 9px; font-size: 15px; }
     #explorer .eyebrow { margin-bottom: 9px; }
-    .workspace-view.topic-library, .workspace-view.results, .workspace-view.saved-results, .workspace-view.genome-map-view { margin-top: 0; }
+    .workspace-view.topic-library, .workspace-view.results, .workspace-view.saved-results, .workspace-view.region-browser-view, .workspace-view.coverage-view { margin-top: 0; }
     #explorer .topic-library h1 { font-size: clamp(34px, 4vw, 44px); }
     #explorer .results h1 { font-size: clamp(30px, 3.2vw, 40px); }
     .workspace-back {
@@ -592,7 +638,7 @@ PAGE = r'''<!doctype html>
             </button>
           </div>
           <button class="sidebar-nav-button" id="sidebar-map" type="button">
-            <span class="sidebar-nav-index">06</span><span>Genome map</span>
+            <span class="sidebar-nav-index">06</span><span>Region browser</span>
           </button>
           <button class="sidebar-nav-button" id="sidebar-saved" type="button">
             <span class="sidebar-nav-index">07</span><span>Saved results</span><span class="sidebar-nav-count" id="sidebar-saved-count">0</span>
@@ -604,6 +650,7 @@ PAGE = r'''<!doctype html>
           <span class="sidebar-bundle-status" id="validation">Verified</span>
           <span class="sidebar-bundle-meta">Genome spec <span id="spec-version">Loading</span> · <span id="build">Loading</span></span>
           <span class="sidebar-bundle-meta"><span id="snapshot">Loading</span> · <span id="stored">Loading</span> local data</span>
+          <button class="sidebar-bundle-link" id="sidebar-coverage" type="button">Coverage &amp; quality</button>
         </div>
       </div>
       <div class="header-actions">
@@ -695,15 +742,86 @@ PAGE = r'''<!doctype html>
         <div class="topic-catalog" id="topic-catalog" role="tabpanel"></div>
       </section>
 
-      <section class="workspace-view genome-map-view" id="view-map" aria-labelledby="genome-map-title" hidden>
+      <section class="workspace-view region-browser-view" id="view-map" aria-labelledby="region-browser-title" hidden>
+        <div class="region-browser-head">
+          <div>
+            <h1 id="region-browser-title">Region browser</h1>
+            <p class="lede">Start with a gene, rsID, or GRCh38 coordinate recorded in this bundle.</p>
+          </div>
+          <div class="map-build" id="region-build"></div>
+        </div>
+        <form class="region-search" id="region-search-form">
+          <input id="region-search-input" type="search" aria-label="Find a genomic region" autocomplete="off" spellcheck="false" placeholder="CYP2C19, rs429358, or chr10:94,700,000-95,000,000">
+          <button class="search-button" id="region-search-button" type="submit">Open region</button>
+        </form>
+        <div class="region-examples" aria-label="Region browser examples">
+          <span>Examples</span>
+          <button type="button" data-region-query="CYP2C19">CYP2C19</button>
+          <button type="button" data-region-query="rs11188082">rs11188082</button>
+          <button type="button" data-region-query="chr10:94808278">chr10:94808278</button>
+        </div>
+        <div class="region-browser-status empty" id="region-browser-status">Choose a locus to see the records and context included in this bundle.</div>
+        <div class="region-browser-workspace" id="region-browser-workspace" hidden>
+          <div class="region-toolbar">
+            <div>
+              <p class="eyebrow" id="region-target-kind">Selected region</p>
+              <h2 id="region-target-title"></h2>
+              <p class="region-coordinate" id="region-coordinate"></p>
+            </div>
+            <div class="region-controls" aria-label="Region navigation">
+              <button type="button" id="region-pan-left" aria-label="Pan region left">←</button>
+              <button type="button" id="region-zoom-out">Zoom out</button>
+              <button type="button" id="region-zoom-in">Zoom in</button>
+              <button type="button" id="region-pan-right" aria-label="Pan region right">→</button>
+            </div>
+          </div>
+          <div class="region-ruler" id="region-ruler" aria-label="Genomic coordinate ruler"></div>
+          <div class="region-tracks" aria-label="Bundle tracks for this region">
+            <div class="region-track-row">
+              <div class="region-track-label"><strong>Genes</strong><span id="region-genes-meta"></span></div>
+              <div class="region-track" id="region-gene-track"></div>
+            </div>
+            <div class="region-track-row">
+              <div class="region-track-label"><strong>Recorded annotations</strong><span id="region-annotations-meta"></span></div>
+              <div class="region-track region-point-track" id="region-annotation-track"></div>
+            </div>
+            <div class="region-track-row">
+              <div class="region-track-label"><strong>Your variants</strong><span id="region-variants-meta"></span></div>
+              <div class="region-track region-density-track" id="region-variant-track"></div>
+            </div>
+            <div class="region-track-row">
+              <div class="region-track-label"><strong>Callability</strong><span id="region-callability-meta"></span></div>
+              <div class="region-track region-callability-track" id="region-callability-track"></div>
+            </div>
+          </div>
+          <p class="region-track-note" id="region-track-note">Tracks contain only fields recorded in the selected bundle.</p>
+          <section class="region-records" aria-labelledby="region-records-title">
+            <div class="region-records-head">
+              <h2 id="region-records-title">Variant records in this region</h2>
+              <span id="region-records-count"></span>
+            </div>
+            <div id="region-records-content"></div>
+            <nav class="result-pagination" id="region-records-pagination" aria-label="Region variant pages" hidden>
+              <span class="pagination-range" id="region-records-page-range" aria-live="polite"></span>
+              <div class="pagination-actions">
+                <button class="pagination-button" id="region-records-previous" type="button">Previous</button>
+                <button class="pagination-button" id="region-records-next" type="button">Next</button>
+              </div>
+            </nav>
+          </section>
+        </div>
+      </section>
+
+      <section class="workspace-view coverage-view" id="view-coverage" aria-labelledby="coverage-title" hidden>
         <div class="genome-map-head">
           <div>
-            <h1 id="genome-map-title">Genome map</h1>
-            <p class="lede">Recorded variant distribution across this bundle.</p>
+            <p class="eyebrow">Bundle details</p>
+            <h1 id="coverage-title">Coverage &amp; quality</h1>
+            <p class="lede">Technical chromosome and callability summary recorded in this bundle.</p>
           </div>
           <div class="map-build" id="map-build"></div>
         </div>
-        <div class="map-summary-strip" aria-label="Genome map summary">
+        <div class="map-summary-strip" aria-label="Coverage and quality summary">
           <div class="map-stat">
             <span>Recorded variant rows</span>
             <strong id="map-total">Loading</strong>
@@ -713,36 +831,13 @@ PAGE = r'''<!doctype html>
             <strong id="map-callability">Loading</strong>
           </div>
         </div>
-        <p class="map-explanation"><span class="density-key" aria-hidden="true"></span><span id="map-explanation-text">Green shows recorded variant density in 10 Mb coordinate windows. The windows are display units, not biological regions.</span><span class="map-callability-key" id="map-callability-key" hidden><span class="callability-key-bar" aria-hidden="true"></span>Blue shows the callable percentage of each window.</span></p>
-        <div id="genome-map-content" aria-live="polite">
-          <div class="empty map-loading">Preparing the chromosome overview...</div>
+        <p class="coverage-explanation">This is a bundle completeness and quality-control summary. It does not rank biological importance.</p>
+        <div class="map-table-wrap coverage-table-wrap">
+          <table class="map-table">
+            <thead><tr><th>Chromosome</th><th>Length</th><th>Recorded variants</th><th>Callability</th></tr></thead>
+            <tbody id="map-table-body"></tbody>
+          </table>
         </div>
-        <section class="map-region-browser" id="map-region-browser" aria-labelledby="map-region-title" hidden>
-          <div class="map-region-head">
-            <div>
-              <h2 id="map-region-title"></h2>
-              <p class="map-region-summary" id="map-region-summary" aria-live="polite"></p>
-            </div>
-            <button class="map-region-close" id="map-region-close" type="button">Close region</button>
-          </div>
-          <div id="map-region-content"></div>
-          <nav class="result-pagination map-region-pagination" id="map-region-pagination" aria-label="Region pages" hidden>
-            <span class="pagination-range" id="map-region-page-range" aria-live="polite"></span>
-            <div class="pagination-actions">
-              <button class="pagination-button" id="map-region-previous" type="button">Previous</button>
-              <button class="pagination-button" id="map-region-next" type="button">Next</button>
-            </div>
-          </nav>
-        </section>
-        <details class="map-table-disclosure" id="map-table-disclosure" hidden>
-          <summary>Table view</summary>
-          <div class="map-table-wrap">
-            <table class="map-table">
-              <thead><tr><th>Chromosome</th><th>Length</th><th>Recorded variants</th><th>Callability</th></tr></thead>
-              <tbody id="map-table-body"></tbody>
-            </table>
-          </div>
-        </details>
       </section>
 
       <section class="workspace-view saved-results" id="view-saved" aria-labelledby="saved-results-title" hidden>
@@ -801,22 +896,38 @@ PAGE = r'''<!doctype html>
     const topicLibraryLede = document.querySelector("#topic-library-lede");
     const viewSearch = document.querySelector("#view-search");
     const viewMap = document.querySelector("#view-map");
-    const genomeMapContent = document.querySelector("#genome-map-content");
+    const viewCoverage = document.querySelector("#view-coverage");
+    const regionBuild = document.querySelector("#region-build");
+    const regionSearchForm = document.querySelector("#region-search-form");
+    const regionSearchInput = document.querySelector("#region-search-input");
+    const regionSearchButton = document.querySelector("#region-search-button");
+    const regionBrowserStatus = document.querySelector("#region-browser-status");
+    const regionBrowserWorkspace = document.querySelector("#region-browser-workspace");
+    const regionTargetKind = document.querySelector("#region-target-kind");
+    const regionTargetTitle = document.querySelector("#region-target-title");
+    const regionCoordinate = document.querySelector("#region-coordinate");
+    const regionPanLeft = document.querySelector("#region-pan-left");
+    const regionPanRight = document.querySelector("#region-pan-right");
+    const regionZoomIn = document.querySelector("#region-zoom-in");
+    const regionZoomOut = document.querySelector("#region-zoom-out");
+    const regionRuler = document.querySelector("#region-ruler");
+    const regionGenesMeta = document.querySelector("#region-genes-meta");
+    const regionAnnotationsMeta = document.querySelector("#region-annotations-meta");
+    const regionVariantsMeta = document.querySelector("#region-variants-meta");
+    const regionCallabilityMeta = document.querySelector("#region-callability-meta");
+    const regionGeneTrack = document.querySelector("#region-gene-track");
+    const regionAnnotationTrack = document.querySelector("#region-annotation-track");
+    const regionVariantTrack = document.querySelector("#region-variant-track");
+    const regionCallabilityTrack = document.querySelector("#region-callability-track");
+    const regionRecordsCount = document.querySelector("#region-records-count");
+    const regionRecordsContent = document.querySelector("#region-records-content");
+    const regionRecordsPagination = document.querySelector("#region-records-pagination");
+    const regionRecordsPageRange = document.querySelector("#region-records-page-range");
+    const regionRecordsPrevious = document.querySelector("#region-records-previous");
+    const regionRecordsNext = document.querySelector("#region-records-next");
     const mapTotal = document.querySelector("#map-total");
     const mapCallability = document.querySelector("#map-callability");
-    const mapCallabilityKey = document.querySelector("#map-callability-key");
-    const mapExplanationText = document.querySelector("#map-explanation-text");
     const mapBuild = document.querySelector("#map-build");
-    const mapRegionBrowser = document.querySelector("#map-region-browser");
-    const mapRegionTitle = document.querySelector("#map-region-title");
-    const mapRegionSummary = document.querySelector("#map-region-summary");
-    const mapRegionContent = document.querySelector("#map-region-content");
-    const mapRegionClose = document.querySelector("#map-region-close");
-    const mapRegionPagination = document.querySelector("#map-region-pagination");
-    const mapRegionPageRange = document.querySelector("#map-region-page-range");
-    const mapRegionPrevious = document.querySelector("#map-region-previous");
-    const mapRegionNext = document.querySelector("#map-region-next");
-    const mapTableDisclosure = document.querySelector("#map-table-disclosure");
     const mapTableBody = document.querySelector("#map-table-body");
     const viewSaved = document.querySelector("#view-saved");
     const savedResultsList = document.querySelector("#saved-results-list");
@@ -828,6 +939,7 @@ PAGE = r'''<!doctype html>
     const sidebarBundleName = document.querySelector("#sidebar-bundle-name");
     const sidebarSearch = document.querySelector("#sidebar-search");
     const sidebarMap = document.querySelector("#sidebar-map");
+    const sidebarCoverage = document.querySelector("#sidebar-coverage");
     const sidebarSaved = document.querySelector("#sidebar-saved");
     const sidebarSavedCount = document.querySelector("#sidebar-saved-count");
     const sidebarViewButtons = Array.from(document.querySelectorAll("[data-sidebar-view]"));
@@ -844,8 +956,10 @@ PAGE = r'''<!doctype html>
     let resultReturnRoute = "search";
     let genomeMapBundleId = "";
     let genomeMapLoading = false;
-    let selectedMapRegion = null;
-    let mapRegionLoading = false;
+    let regionPayload = null;
+    let regionLoading = false;
+    let regionOriginalTarget = null;
+    let regionRequestToken = 0;
     let savedResults = [];
     let savedResultIds = new Set();
     let savedBundleId = "";
@@ -1118,10 +1232,14 @@ PAGE = r'''<!doctype html>
       sidebarSearch.classList.toggle("is-active", searchActive);
       if (searchActive) sidebarSearch.setAttribute("aria-current", "page");
       else sidebarSearch.removeAttribute("aria-current");
-      const mapActive = route === "map" || (route === "results" && resultReturnRoute === "map");
+      const mapActive = route === "region" || (route === "results" && resultReturnRoute === "region");
       sidebarMap.classList.toggle("is-active", mapActive);
       if (mapActive) sidebarMap.setAttribute("aria-current", "page");
       else sidebarMap.removeAttribute("aria-current");
+      const coverageActive = route === "coverage";
+      sidebarCoverage.classList.toggle("is-active", coverageActive);
+      if (coverageActive) sidebarCoverage.setAttribute("aria-current", "page");
+      else sidebarCoverage.removeAttribute("aria-current");
       const savedActive = route === "saved" || (route === "results" && resultReturnRoute === "saved");
       sidebarSaved.classList.toggle("is-active", savedActive);
       if (savedActive) sidebarSaved.setAttribute("aria-current", "page");
@@ -1135,14 +1253,15 @@ PAGE = r'''<!doctype html>
 
     function showWorkspaceRoute(route, { historyMode = "push", focusSearch = false } = {}) {
       const isDirectoryRoute = Object.hasOwn(directoryViews, route);
-      const resolvedRoute = route === "results" || route === "search" || route === "map" || route === "saved" || isDirectoryRoute ? route : "search";
+      const resolvedRoute = route === "results" || route === "search" || route === "region" || route === "coverage" || route === "saved" || isDirectoryRoute ? route : "search";
       if (Object.hasOwn(directoryViews, resolvedRoute) && activeDirectoryView !== resolvedRoute) {
         activeDirectoryView = resolvedRoute;
         renderTopicCatalog(latestTopics);
       }
       viewSearch.hidden = resolvedRoute !== "search";
       topicLibrary.hidden = !Object.hasOwn(directoryViews, resolvedRoute);
-      viewMap.hidden = resolvedRoute !== "map";
+      viewMap.hidden = resolvedRoute !== "region";
+      viewCoverage.hidden = resolvedRoute !== "coverage";
       viewSaved.hidden = resolvedRoute !== "saved";
       results.hidden = resolvedRoute !== "results";
       activeWorkspaceRoute = resolvedRoute;
@@ -1155,11 +1274,12 @@ PAGE = r'''<!doctype html>
       }
       window.scrollTo({ top: 0, behavior: "auto" });
       if (focusSearch) window.setTimeout(() => input.focus(), 0);
-      if (resolvedRoute === "map") loadGenomeMap();
+      if (resolvedRoute === "coverage") loadGenomeMap();
     }
 
     sidebarSearch.addEventListener("click", () => showWorkspaceRoute("search", { focusSearch: true }));
-    sidebarMap.addEventListener("click", () => showWorkspaceRoute("map"));
+    sidebarMap.addEventListener("click", () => showWorkspaceRoute("region"));
+    sidebarCoverage.addEventListener("click", () => showWorkspaceRoute("coverage"));
     sidebarSaved.addEventListener("click", () => showWorkspaceRoute("saved"));
 
     sidebarViewButtons.forEach(control => {
@@ -1464,21 +1584,27 @@ PAGE = r'''<!doctype html>
       mapBuild.textContent = "";
       mapTotal.textContent = "Loading";
       mapCallability.textContent = "Loading";
-      mapCallabilityKey.hidden = true;
-      mapExplanationText.textContent = "Green shows recorded variant density in 10 Mb coordinate windows. The windows are display units, not biological regions.";
-      genomeMapContent.replaceChildren();
-      const loading = document.createElement("div");
-      loading.className = "empty map-loading";
-      loading.textContent = "Preparing the chromosome overview...";
-      genomeMapContent.append(loading);
-      mapTableDisclosure.hidden = true;
-      mapTableDisclosure.open = false;
       mapTableBody.replaceChildren();
-      selectedMapRegion = null;
-      mapRegionLoading = false;
-      mapRegionBrowser.hidden = true;
-      mapRegionContent.replaceChildren();
-      mapRegionPagination.hidden = true;
+      regionRequestToken += 1;
+      regionPayload = null;
+      regionLoading = false;
+      regionOriginalTarget = null;
+      regionBuild.textContent = "";
+      regionSearchInput.value = "";
+      regionSearchButton.disabled = false;
+      regionSearchButton.textContent = "Open region";
+      regionBrowserStatus.hidden = false;
+      regionBrowserStatus.classList.remove("error");
+      regionBrowserStatus.textContent = "Choose a locus to see the records and context included in this bundle.";
+      regionBrowserWorkspace.hidden = true;
+      regionBrowserWorkspace.removeAttribute("aria-busy");
+      regionRuler.replaceChildren();
+      regionGeneTrack.replaceChildren();
+      regionAnnotationTrack.replaceChildren();
+      regionVariantTrack.replaceChildren();
+      regionCallabilityTrack.replaceChildren();
+      regionRecordsContent.replaceChildren();
+      regionRecordsPagination.hidden = true;
     }
 
     function callabilityText(callability) {
@@ -1507,96 +1633,22 @@ PAGE = r'''<!doctype html>
     function renderGenomeMap(payload) {
       mapBuild.textContent = payload.genome_build || "Genome build not recorded";
       mapCallability.textContent = callabilityText(payload.callability);
-      const hasIntervalCoverage = payload.callability?.state === "available" && payload.callability?.kind === "interval_records";
-      mapCallabilityKey.hidden = !hasIntervalCoverage;
-      genomeMapContent.replaceChildren();
       mapTableBody.replaceChildren();
-      mapTableDisclosure.hidden = true;
 
       if (!payload.supported) {
         mapTotal.textContent = "Overview unavailable";
-        const unavailable = document.createElement("div");
-        unavailable.className = "empty";
-        unavailable.textContent = "This genome build is not covered by the offline chromosome map.";
-        genomeMapContent.append(unavailable);
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 4;
+        cell.textContent = "A chromosome summary is not available for this genome build.";
+        row.append(cell);
+        mapTableBody.append(row);
         return;
       }
 
       const chromosomes = Array.isArray(payload.chromosomes) ? payload.chromosomes : [];
       mapTotal.textContent = `${Number(payload.total_variant_records).toLocaleString("en-US")} recorded variants`;
-      const maxLength = Math.max(...chromosomes.map(chromosome => chromosome.length), 1);
-      const maxBinDensity = Math.max(
-        ...chromosomes.flatMap(chromosome => chromosome.bins.map(bin => (
-          bin.variant_count / Math.max(1, bin.end - bin.start + 1)
-        ))),
-        Number.EPSILON
-      );
-      const map = document.createElement("div");
-      map.className = "chromosome-map";
-      map.setAttribute("aria-label", "Recorded variants by chromosome");
-
       chromosomes.forEach(chromosome => {
-        const row = document.createElement("div");
-        row.className = "chromosome-row";
-        row.dataset.chromosome = chromosome.chrom;
-
-        const name = document.createElement("span");
-        name.className = "chromosome-name";
-        name.textContent = chromosome.label;
-        const shell = document.createElement("div");
-        shell.className = "chromosome-track-shell";
-        const track = document.createElement("div");
-        track.className = "chromosome-track";
-        track.style.width = `${Math.max(4, chromosome.length / maxLength * 100)}%`;
-        track.setAttribute("role", "group");
-        track.setAttribute("aria-label", `Chromosome ${chromosome.label}, ten megabase regions`);
-        chromosome.bins.forEach(bin => {
-          const control = document.createElement("button");
-          control.className = "density-bin";
-          control.type = "button";
-          control.dataset.count = String(bin.variant_count);
-          control.style.flexGrow = String((bin.end - bin.start + 1) / payload.bin_size_bases);
-          const binDensity = bin.variant_count / Math.max(1, bin.end - bin.start + 1);
-          const density = bin.variant_count
-            ? 0.18 + 0.82 * Math.sqrt(binDensity / maxBinDensity)
-            : 0;
-          control.style.setProperty("--density", density.toFixed(3));
-          const range = `${Number(bin.start).toLocaleString("en-US")} to ${Number(bin.end).toLocaleString("en-US")}`;
-          const callabilityPercent = typeof bin.callability_percent === "number"
-            ? bin.callability_percent
-            : null;
-          if (hasIntervalCoverage && callabilityPercent !== null) {
-            control.classList.add("has-coverage");
-            control.style.setProperty("--callable", String(callabilityPercent / 100));
-          }
-          const callabilityLabel = callabilityPercent === null
-            ? ""
-            : `, ${mapPercent(callabilityPercent)} of bases marked callable`;
-          control.setAttribute(
-            "aria-label",
-            `Chromosome ${chromosome.label}, ${range}: ${Number(bin.variant_count).toLocaleString("en-US")} recorded variants${callabilityLabel}${bin.variant_count ? ". Open region" : ""}`
-          );
-          control.title = `${range} · ${Number(bin.variant_count).toLocaleString("en-US")} recorded variants${callabilityLabel}`;
-          control.disabled = !bin.variant_count;
-          if (bin.variant_count) {
-            control.addEventListener("click", () => {
-              loadMapRegion({
-                chrom: chromosome.chrom,
-                label: chromosome.label,
-                start: bin.start,
-                end: bin.end
-              });
-            });
-          }
-          track.append(control);
-        });
-        shell.append(track);
-        const count = document.createElement("span");
-        count.className = "chromosome-count";
-        count.textContent = `${Number(chromosome.variant_count).toLocaleString("en-US")} variants`;
-        row.append(name, shell, count);
-        map.append(row);
-
         const tableRow = document.createElement("tr");
         const callabilityCell = payload.callability?.state === "available"
           ? payload.callability.kind === "interval_records"
@@ -1621,114 +1673,347 @@ PAGE = r'''<!doctype html>
         });
         mapTableBody.append(tableRow);
       });
-
-      genomeMapContent.append(map);
-      mapTableDisclosure.hidden = false;
     }
-
-    function renderMapRegion(payload, region) {
-      const range = `${Number(region.start).toLocaleString("en-US")}-${Number(region.end).toLocaleString("en-US")}`;
-      mapRegionTitle.textContent = `Chromosome ${region.label}: ${range}`;
-      const pageStart = payload.total ? (payload.page - 1) * payload.page_size + 1 : 0;
-      const pageEnd = Math.min(payload.page * payload.page_size, payload.total);
-      mapRegionSummary.textContent = `${Number(payload.total).toLocaleString("en-US")} recorded variants in this region`;
-      mapRegionContent.replaceChildren();
-      if (payload.hits.length) {
-        mapRegionContent.append(recordsFor(payload.hits, `${region.chrom}:${region.start}-${region.end}`, "variants"));
-      } else {
-        const empty = document.createElement("div");
-        empty.className = "empty";
-        empty.textContent = "No variant records were found in this region.";
-        mapRegionContent.append(empty);
-      }
-      mapRegionPagination.hidden = payload.page_count <= 1;
-      mapRegionPageRange.textContent = `${pageStart}-${pageEnd} of ${Number(payload.total).toLocaleString("en-US")}`;
-      mapRegionPrevious.disabled = payload.page <= 1;
-      mapRegionNext.disabled = payload.page >= payload.page_count;
-    }
-
-    async function loadMapRegion(region, page = 1, { scroll = true } = {}) {
-      const request = { ...region, page };
-      selectedMapRegion = request;
-      mapRegionLoading = true;
-      mapRegionBrowser.hidden = false;
-      mapRegionContent.setAttribute("aria-busy", "true");
-      mapRegionPrevious.disabled = true;
-      mapRegionNext.disabled = true;
-      mapRegionTitle.textContent = `Chromosome ${region.label}`;
-      mapRegionSummary.textContent = "Loading recorded variants...";
-      mapRegionContent.replaceChildren();
-      const loading = document.createElement("div");
-      loading.className = "empty map-loading";
-      loading.textContent = "Loading this region...";
-      mapRegionContent.append(loading);
-      mapRegionPagination.hidden = true;
-      try {
-        const payload = await postJson("/api/genome-map/region", {
-          chrom: region.chrom,
-          start: region.start,
-          end: region.end,
-          page
-        });
-        if (selectedMapRegion !== request) return;
-        renderMapRegion(payload, region);
-        if (scroll) mapRegionBrowser.scrollIntoView({ behavior: "smooth", block: "start" });
-      } catch (error) {
-        if (selectedMapRegion !== request) return;
-        mapRegionSummary.textContent = "Region unavailable";
-        mapRegionContent.replaceChildren();
-        const unavailable = document.createElement("div");
-        unavailable.className = "empty error";
-        unavailable.textContent = error.message || "This genome region could not be loaded.";
-        mapRegionContent.append(unavailable);
-      } finally {
-        if (selectedMapRegion === request) {
-          mapRegionLoading = false;
-          mapRegionContent.removeAttribute("aria-busy");
-        }
-      }
-    }
-
-    mapRegionClose.addEventListener("click", () => {
-      selectedMapRegion = null;
-      mapRegionLoading = false;
-      mapRegionBrowser.hidden = true;
-      mapRegionContent.replaceChildren();
-    });
-    mapRegionPrevious.addEventListener("click", () => {
-      if (!selectedMapRegion || selectedMapRegion.page <= 1) return;
-      loadMapRegion(selectedMapRegion, selectedMapRegion.page - 1);
-    });
-    mapRegionNext.addEventListener("click", () => {
-      if (!selectedMapRegion) return;
-      loadMapRegion(selectedMapRegion, selectedMapRegion.page + 1);
-    });
 
     async function loadGenomeMap() {
       const requestedBundleId = latestStatus?.active_bundle_id;
       if (!requestedBundleId || genomeMapLoading || genomeMapBundleId === requestedBundleId) return;
       genomeMapLoading = true;
-      genomeMapContent.setAttribute("aria-busy", "true");
       try {
         const response = await fetch(`${basePath}/api/genome-map`);
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || "Genome map could not be loaded.");
+        if (!response.ok) throw new Error(payload.error || "Coverage summary could not be loaded.");
         if (latestStatus?.active_bundle_id !== requestedBundleId) return;
         renderGenomeMap(payload);
         genomeMapBundleId = requestedBundleId;
       } catch (error) {
         mapTotal.textContent = "Overview unavailable";
         mapCallability.textContent = "Unavailable";
-        genomeMapContent.replaceChildren();
-        const unavailable = document.createElement("div");
-        unavailable.className = "empty error";
-        unavailable.textContent = error.message || "Genome map could not be loaded.";
-        genomeMapContent.append(unavailable);
+        mapTableBody.replaceChildren();
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 4;
+        cell.textContent = error.message || "Coverage summary could not be loaded.";
+        row.append(cell);
+        mapTableBody.append(row);
       } finally {
         genomeMapLoading = false;
-        genomeMapContent.removeAttribute("aria-busy");
       }
     }
+
+    function exactPosition(value) {
+      return Number(value).toLocaleString("en-US");
+    }
+
+    function rulerPosition(value) {
+      if (value >= 1000000000) return `${(value / 1000000000).toFixed(2)} Gb`;
+      if (value >= 1000000) return `${(value / 1000000).toFixed(2)} Mb`;
+      if (value >= 1000) return `${(value / 1000).toFixed(1)} kb`;
+      return `${exactPosition(value)} bp`;
+    }
+
+    function trackOffset(position, region) {
+      return Math.max(0, Math.min(100, (position - region.start) / Math.max(1, region.length - 1) * 100));
+    }
+
+    function trackSpan(start, end, region) {
+      const clippedStart = Math.max(region.start, Number(start));
+      const clippedEnd = Math.min(region.end, Number(end));
+      const left = trackOffset(clippedStart, region);
+      const right = trackOffset(clippedEnd, region);
+      return { left, width: Math.max(.25, right - left) };
+    }
+
+    function emptyTrack(track, message) {
+      track.replaceChildren();
+      const empty = document.createElement("span");
+      empty.className = "region-track-empty";
+      empty.textContent = message;
+      track.append(empty);
+    }
+
+    function renderRegionRuler(region) {
+      regionRuler.replaceChildren();
+      for (let index = 0; index < 5; index += 1) {
+        const tick = document.createElement("span");
+        tick.className = "region-ruler-tick";
+        const position = Math.round(region.start + (region.length - 1) * index / 4);
+        tick.textContent = rulerPosition(position);
+        regionRuler.append(tick);
+      }
+    }
+
+    function renderGeneTrack(payload) {
+      const track = payload.genes || {};
+      const genes = Array.isArray(track.genes) ? track.genes : [];
+      if (track.state !== "available") {
+        regionGenesMeta.textContent = track.state === "not_included" ? "Gene index not included" : "Unavailable";
+        emptyTrack(regionGeneTrack, "No gene spans are available from this bundle.");
+        return;
+      }
+      regionGenesMeta.textContent = genes.length ? `${genes.length} recorded gene ${genes.length === 1 ? "span" : "spans"}` : "No recorded gene spans";
+      if (!genes.length) {
+        emptyTrack(regionGeneTrack, "No bundle gene spans overlap this region.");
+        return;
+      }
+      regionGeneTrack.replaceChildren();
+      genes.forEach(gene => {
+        const feature = document.createElement("button");
+        feature.type = "button";
+        feature.className = "region-gene-feature";
+        const span = trackSpan(gene.start_pos, gene.end_pos, payload.region);
+        feature.style.left = `${span.left}%`;
+        feature.style.width = `${span.width}%`;
+        feature.textContent = gene.gene_symbol;
+        feature.title = `${gene.gene_symbol} · ${gene.chrom}:${exactPosition(gene.start_pos)}-${exactPosition(gene.end_pos)}`;
+        feature.addEventListener("click", () => {
+          regionSearchInput.value = gene.gene_symbol;
+          loadRegion({ query: gene.gene_symbol });
+        });
+        regionGeneTrack.append(feature);
+      });
+    }
+
+    function renderAnnotationTrack(payload) {
+      const track = payload.annotations || {};
+      const points = Array.isArray(track.points) ? track.points : [];
+      if (track.state !== "available") {
+        regionAnnotationsMeta.textContent = track.state === "not_included" ? "Annotation fields not included" : "Unavailable";
+        emptyTrack(regionAnnotationTrack, "No recorded annotation track is available.");
+        return;
+      }
+      const suffix = track.truncated ? " · first 200 shown" : "";
+      regionAnnotationsMeta.textContent = `${Number(track.total).toLocaleString("en-US")} recorded ${track.total === 1 ? "annotation" : "annotations"}${suffix}`;
+      if (!points.length) {
+        emptyTrack(regionAnnotationTrack, "No recorded annotations in this region.");
+        return;
+      }
+      regionAnnotationTrack.replaceChildren();
+      points.forEach(point => {
+        const marker = document.createElement("button");
+        marker.type = "button";
+        marker.className = "region-annotation-point";
+        marker.style.left = `${trackOffset(Number(point.pos), payload.region)}%`;
+        const identifier = point.rsid || point.variant_id || `${payload.region.chrom}:${point.pos}`;
+        const gene = point.gene ? ` · ${point.gene}` : "";
+        const labels = Array.isArray(point.labels) ? point.labels.join(", ") : "Recorded annotation";
+        marker.title = `${identifier}${gene} · ${labels}`;
+        marker.setAttribute("aria-label", `Open ${identifier}: ${labels}`);
+        marker.addEventListener("click", () => {
+          input.value = identifier;
+          search(identifier);
+        });
+        regionAnnotationTrack.append(marker);
+      });
+    }
+
+    function renderVariantTrack(payload) {
+      const track = payload.variants || {};
+      const bins = Array.isArray(track.bins) ? track.bins : [];
+      const total = Number(track.total || 0);
+      regionVariantsMeta.textContent = `${total.toLocaleString("en-US")} recorded ${total === 1 ? "variant" : "variants"}`;
+      if (!bins.length || !total) {
+        emptyTrack(regionVariantTrack, "No variant records in this region.");
+        return;
+      }
+      const maxCount = Math.max(...bins.map(bin => Number(bin.variant_count || 0)), 1);
+      regionVariantTrack.replaceChildren();
+      bins.forEach(bin => {
+        const bar = document.createElement("button");
+        bar.type = "button";
+        bar.className = "region-variant-bin";
+        const count = Number(bin.variant_count || 0);
+        bar.style.setProperty("--height", String(count ? Math.sqrt(count / maxCount) : 0));
+        bar.title = `${exactPosition(bin.start)}-${exactPosition(bin.end)} · ${count.toLocaleString("en-US")} recorded variants`;
+        bar.setAttribute("aria-label", `${count.toLocaleString("en-US")} recorded variants from ${exactPosition(bin.start)} to ${exactPosition(bin.end)}${count ? ". Open this interval" : ""}`);
+        bar.disabled = !count;
+        if (count) {
+          bar.addEventListener("click", () => loadRegion({
+            chrom: payload.region.chrom,
+            start: bin.start,
+            end: bin.end,
+            page: 1
+          }, { preserveTarget: true }));
+        }
+        regionVariantTrack.append(bar);
+      });
+    }
+
+    function renderCallabilityTrack(payload) {
+      const track = payload.callability || {};
+      const bins = Array.isArray(track.bins) ? track.bins : [];
+      if (track.state === "not_included") {
+        regionCallabilityMeta.textContent = "Not included";
+        emptyTrack(regionCallabilityTrack, "Callability data is not included in this bundle.");
+        return;
+      }
+      if (track.state === "unavailable") {
+        regionCallabilityMeta.textContent = "Unavailable";
+        emptyTrack(regionCallabilityTrack, "The included callability data could not be summarized.");
+        return;
+      }
+      if (track.kind === "interval_records") {
+        const percent = Number(track.coverage_percent || 0);
+        regionCallabilityMeta.textContent = `${mapPercent(percent)} of this region marked callable`;
+        regionCallabilityTrack.replaceChildren();
+        bins.forEach(bin => {
+          const segment = document.createElement("span");
+          segment.className = "region-callability-bin";
+          const coverage = Number(bin.callability_percent || 0);
+          segment.style.setProperty("--coverage", String(coverage / 100));
+          segment.title = `${exactPosition(bin.start)}-${exactPosition(bin.end)} · ${mapPercent(coverage)} marked callable`;
+          regionCallabilityTrack.append(segment);
+        });
+        return;
+      }
+      const sites = Number(track.site_count || 0);
+      regionCallabilityMeta.textContent = `${sites.toLocaleString("en-US")} callable ${sites === 1 ? "site" : "sites"} · no coverage percentage`;
+      if (!bins.length || !sites) {
+        emptyTrack(regionCallabilityTrack, "No callable sites are recorded in this region.");
+        return;
+      }
+      const maxSites = Math.max(...bins.map(bin => Number(bin.callable_site_count || 0)), 1);
+      regionCallabilityTrack.replaceChildren();
+      bins.forEach(bin => {
+        const segment = document.createElement("span");
+        segment.className = "region-callability-bin site-bin";
+        const count = Number(bin.callable_site_count || 0);
+        segment.style.setProperty("--height", String(count ? Math.sqrt(count / maxSites) : 0));
+        segment.title = `${exactPosition(bin.start)}-${exactPosition(bin.end)} · ${count.toLocaleString("en-US")} callable sites`;
+        regionCallabilityTrack.append(segment);
+      });
+    }
+
+    function renderRegionRecords(payload) {
+      const records = payload.records || {};
+      const hits = Array.isArray(records.hits) ? records.hits : [];
+      const total = Number(records.total || 0);
+      const page = Number(records.page || 1);
+      const pageSize = Number(records.page_size || 25);
+      const pageCount = Number(records.page_count || 0);
+      regionRecordsCount.textContent = `${total.toLocaleString("en-US")} ${total === 1 ? "record" : "records"}`;
+      regionRecordsContent.replaceChildren();
+      if (hits.length) {
+        const context = `${payload.region.chrom}:${payload.region.start}-${payload.region.end}`;
+        regionRecordsContent.append(recordsFor(hits, context, "variants"));
+      } else {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No variant records were found in this region.";
+        regionRecordsContent.append(empty);
+      }
+      const pageStart = total ? (page - 1) * pageSize + 1 : 0;
+      const pageEnd = Math.min(page * pageSize, total);
+      regionRecordsPagination.hidden = pageCount <= 1;
+      regionRecordsPageRange.textContent = `${pageStart}-${pageEnd} of ${total.toLocaleString("en-US")}`;
+      regionRecordsPrevious.disabled = page <= 1;
+      regionRecordsNext.disabled = page >= pageCount;
+    }
+
+    function renderRegion(payload, { preserveTarget = false } = {}) {
+      regionPayload = payload;
+      if (!preserveTarget || !regionOriginalTarget) regionOriginalTarget = payload.target;
+      const displayTarget = regionOriginalTarget || payload.target;
+      const targetLabels = { gene: "Gene", rsid: "Variant", coordinate: "Coordinate", region: "Region" };
+      regionTargetKind.textContent = targetLabels[displayTarget.kind] || "Selected region";
+      regionTargetTitle.textContent = displayTarget.label;
+      regionCoordinate.textContent = `${payload.region.chrom}:${exactPosition(payload.region.start)}-${exactPosition(payload.region.end)} · ${mapLength(payload.region.length)}`;
+      regionBuild.textContent = payload.genome_build || latestStatus?.genome_build || "";
+      regionSearchInput.value = displayTarget.label;
+      regionBrowserStatus.hidden = true;
+      regionBrowserStatus.classList.remove("error");
+      regionBrowserWorkspace.hidden = false;
+      renderRegionRuler(payload.region);
+      renderGeneTrack(payload);
+      renderAnnotationTrack(payload);
+      renderVariantTrack(payload);
+      renderCallabilityTrack(payload);
+      renderRegionRecords(payload);
+      regionZoomIn.disabled = payload.region.length <= 100;
+      regionZoomOut.disabled = payload.region.length >= Math.min(25000000, payload.region.chromosome_length);
+      regionPanLeft.disabled = payload.region.start <= 1;
+      regionPanRight.disabled = payload.region.end >= payload.region.chromosome_length;
+    }
+
+    async function loadRegion(request, { preserveTarget = false, scrollRecords = false } = {}) {
+      const token = ++regionRequestToken;
+      const hadPayload = Boolean(regionPayload);
+      regionLoading = true;
+      regionSearchButton.disabled = true;
+      regionSearchButton.innerHTML = '<span class="spinner"></span>Opening';
+      regionBrowserWorkspace.setAttribute("aria-busy", "true");
+      if (!preserveTarget) {
+        regionOriginalTarget = null;
+        regionBrowserWorkspace.hidden = true;
+        regionBrowserStatus.hidden = false;
+        regionBrowserStatus.classList.remove("error");
+        regionBrowserStatus.textContent = "Opening this region...";
+      }
+      try {
+        const payload = await postJson("/api/region-browser", request);
+        if (token !== regionRequestToken) return;
+        renderRegion(payload, { preserveTarget });
+        if (scrollRecords) regionRecordsContent.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        if (token !== regionRequestToken) return;
+        regionBrowserStatus.hidden = false;
+        regionBrowserStatus.classList.add("error");
+        regionBrowserStatus.textContent = error.message || "This genome region could not be loaded.";
+        if (!hadPayload || !preserveTarget) regionBrowserWorkspace.hidden = true;
+      } finally {
+        if (token === regionRequestToken) {
+          regionLoading = false;
+          regionSearchButton.disabled = false;
+          regionSearchButton.textContent = "Open region";
+          regionBrowserWorkspace.removeAttribute("aria-busy");
+        }
+      }
+    }
+
+    function navigateRegion({ scale = 1, shift = 0 } = {}) {
+      if (!regionPayload || regionLoading) return;
+      const region = regionPayload.region;
+      const requestedLength = Math.max(100, Math.min(25000000, region.chromosome_length, Math.round(region.length * scale)));
+      const center = Math.round((region.start + region.end) / 2 + region.length * shift);
+      const maximumStart = Math.max(1, region.chromosome_length - requestedLength + 1);
+      const start = Math.min(maximumStart, Math.max(1, center - Math.floor(requestedLength / 2)));
+      const end = start + requestedLength - 1;
+      loadRegion({ chrom: region.chrom, start, end, page: 1 }, { preserveTarget: true });
+    }
+
+    regionSearchForm.addEventListener("submit", event => {
+      event.preventDefault();
+      const query = regionSearchInput.value.trim();
+      if (query) loadRegion({ query, page: 1 });
+    });
+    document.querySelectorAll("[data-region-query]").forEach(example => {
+      example.addEventListener("click", () => {
+        regionSearchInput.value = example.dataset.regionQuery;
+        loadRegion({ query: example.dataset.regionQuery, page: 1 });
+      });
+    });
+    regionZoomIn.addEventListener("click", () => navigateRegion({ scale: .5 }));
+    regionZoomOut.addEventListener("click", () => navigateRegion({ scale: 2 }));
+    regionPanLeft.addEventListener("click", () => navigateRegion({ shift: -.5 }));
+    regionPanRight.addEventListener("click", () => navigateRegion({ shift: .5 }));
+    regionRecordsPrevious.addEventListener("click", () => {
+      if (!regionPayload || regionLoading || regionPayload.records.page <= 1) return;
+      loadRegion({
+        chrom: regionPayload.region.chrom,
+        start: regionPayload.region.start,
+        end: regionPayload.region.end,
+        page: regionPayload.records.page - 1
+      }, { preserveTarget: true, scrollRecords: true });
+    });
+    regionRecordsNext.addEventListener("click", () => {
+      if (!regionPayload || regionLoading || regionPayload.records.page >= regionPayload.records.page_count) return;
+      loadRegion({
+        chrom: regionPayload.region.chrom,
+        start: regionPayload.region.start,
+        end: regionPayload.region.end,
+        page: regionPayload.records.page + 1
+      }, { preserveTarget: true, scrollRecords: true });
+    });
 
     function recordForSave(hit) {
       return Object.fromEntries(

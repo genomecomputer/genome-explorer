@@ -72,48 +72,45 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(firstWindow.locator("#view-library")).toBeHidden();
     await expect(firstWindow.locator("#results")).toBeHidden();
     await expect(firstWindow).toHaveURL(/#search$/);
-    await firstWindow.getByRole("button", { name: /Genome map/ }).click();
+    await firstWindow.getByRole("button", { name: /Region browser/ }).click();
     await expect(firstWindow.locator("#view-map")).toBeVisible();
-    await expect(firstWindow.getByRole("heading", { name: "Genome map" })).toBeVisible();
-    await expect(firstWindow.locator("#map-total")).toHaveText("5,159,392 recorded variants");
-    await expect(firstWindow.locator("#map-callability")).toContainText("Not included in this bundle");
-    await expect(firstWindow.locator(".chromosome-row")).toHaveCount(25);
-    const chromosomeOne = firstWindow.locator('.chromosome-row[data-chromosome="chr1"]');
-    await expect(chromosomeOne).toContainText("396,227");
+    await expect(firstWindow.getByRole("heading", { name: "Region browser" })).toBeVisible();
+    await expect(firstWindow.locator("#region-browser-status")).toContainText("Choose a locus");
+    await firstWindow.getByRole("searchbox", { name: "Find a genomic region" }).fill("CYP2C19");
+    const regionResponse = firstWindow.waitForResponse((response) => response.url().endsWith("/api/region-browser"));
+    await firstWindow.getByRole("button", { name: "Open region" }).click();
+    expect((await regionResponse).ok()).toBe(true);
+    await expect(firstWindow.locator("#region-browser-workspace")).toBeVisible();
+    await expect(firstWindow.locator("#region-target-title")).toHaveText("CYP2C19");
+    await expect(firstWindow.locator("#region-coordinate")).toContainText("chr10:");
+    await expect(firstWindow.locator("#region-gene-track").getByRole("button", { name: "CYP2C19" })).toBeVisible();
+    await expect(firstWindow.locator("#region-variants-meta")).toContainText("recorded variants");
+    await expect(firstWindow.locator("#region-records-content .record-row").first()).toBeVisible();
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       await firstWindow.screenshot({
-        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "genome-map.png"),
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "region-browser.png"),
         fullPage: true,
       });
-      const mapViewport = await firstWindow.evaluate(() => ({
+      const regionViewport = await firstWindow.evaluate(() => ({
         width: window.innerWidth,
         height: window.innerHeight,
       }));
       await firstWindow.setViewportSize({ width: 700, height: 900 });
       await firstWindow.screenshot({
-        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "genome-map-narrow.png"),
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "region-browser-narrow.png"),
         fullPage: true,
       });
-      await firstWindow.setViewportSize(mapViewport);
+      await firstWindow.setViewportSize(regionViewport);
     }
-    await chromosomeOne.locator(".density-bin:not(:disabled)").first().click();
-    await expect(firstWindow.locator("#map-region-browser")).toBeVisible();
-    await expect(firstWindow.locator("#map-region-title")).toContainText("Chromosome 1:");
-    await expect(firstWindow.locator("#map-region-summary")).toContainText("recorded variants in this region");
-    await expect(firstWindow.locator("#map-region-content .record-row")).toHaveCount(25);
-    await expect(firstWindow.locator("#map-region-page-range")).toContainText("1-25 of");
-    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
-      await firstWindow.screenshot({
-        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "genome-map-region.png"),
-        fullPage: true,
-      });
-    }
-    await firstWindow.locator("#map-region-next").click();
-    await expect(firstWindow.locator("#map-region-page-range")).toContainText("26-50 of");
-    await firstWindow.locator("#map-region-close").click();
-    await expect(firstWindow.locator("#map-region-browser")).toBeHidden();
-    await expect(firstWindow.locator("#view-map")).toBeVisible();
-    await firstWindow.locator("#map-table-disclosure > summary").click();
+    const originalRegion = await firstWindow.locator("#region-coordinate").textContent();
+    const zoomResponse = firstWindow.waitForResponse((response) => response.url().endsWith("/api/region-browser"));
+    await firstWindow.getByRole("button", { name: "Zoom in" }).click();
+    expect((await zoomResponse).ok()).toBe(true);
+    await expect(firstWindow.locator("#region-coordinate")).not.toHaveText(originalRegion || "");
+    await firstWindow.getByRole("button", { name: /Coverage & quality/ }).click();
+    await expect(firstWindow.locator("#view-coverage")).toBeVisible();
+    await expect(firstWindow.locator("#map-total")).toHaveText("5,159,392 recorded variants");
+    await expect(firstWindow.locator("#map-callability")).toContainText("Not included in this bundle");
     await expect(firstWindow.locator("#map-table-body tr")).toHaveCount(25);
     await firstWindow.getByRole("tab", { name: /Personal results/ }).click();
     await expect(firstWindow.locator("#view-search")).toBeHidden();
@@ -489,7 +486,7 @@ test("opens and searches a current v1.1 bundle", async () => {
     await expect(window.locator("#explorer")).toBeVisible({ timeout: 30_000 });
     await expect(window.locator("#validation")).toHaveText("Verified");
     await expect(window.locator("#spec-version")).toHaveText("v1.1.0");
-    await window.getByRole("button", { name: /Genome map/ }).click();
+    await window.getByRole("button", { name: /Coverage & quality/ }).click();
     await expect(window.locator("#map-callability")).toContainText("Included, no records");
 
     await window.getByRole("tab", { name: /Medications/ }).click();
