@@ -14,11 +14,14 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import duckdb
 
-SUPPORTED_SCHEMA_VERSIONS = {"1.0.0", "1.1.0"}
+SUPPORTED_SCHEMA_MAJOR = 1
 CHUNK_SIZE = 1024 * 1024
 MAX_MANIFEST_BYTES = 5 * 1024 * 1024
 RECEIPT_FILENAME = ".validation-receipt.json"
 RECEIPT_VERSION = 1
+SCHEMA_VERSION_PATTERN = re.compile(
+    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+)
 COORDINATE_PATTERN = re.compile(
     r"^(?:chr)?(?P<chrom>[0-9]+|X|Y|M):(?P<pos>[0-9]+)"
     r"(?::(?P<ref>[ACGT]+):(?P<alt>[ACGT]+))?$",
@@ -108,6 +111,13 @@ def _read_manifest(archive: Path) -> Tuple[str, bytes, Dict[str, Any]]:
 
 def _manifest_identity(manifest_bytes: bytes) -> str:
     return hashlib.sha256(manifest_bytes).hexdigest()[:20]
+
+
+def _supports_schema_version(schema_version: Any) -> bool:
+    if not isinstance(schema_version, str):
+        return False
+    match = SCHEMA_VERSION_PATTERN.fullmatch(schema_version)
+    return match is not None and int(match.group(1)) == SUPPORTED_SCHEMA_MAJOR
 
 
 def _archive_fingerprint(archive: Path) -> Dict[str, Any]:
@@ -248,8 +258,11 @@ def open_bundle(
 
     root_name, manifest_bytes, manifest = _read_manifest(archive)
     schema_version = manifest.get("schema_version")
-    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
-        raise ValueError("unsupported schema version: %r" % schema_version)
+    if not _supports_schema_version(schema_version):
+        raise ValueError(
+            "unsupported schema version: %r; Genome Explorer supports v1.x bundles"
+            % schema_version
+        )
 
     declared = manifest.get("files")
     if not isinstance(declared, dict):
@@ -436,6 +449,85 @@ def _rows(cursor: Any, section: str) -> List[Dict[str, Any]]:
         {"section": section, **dict(zip(columns, row))}
         for row in cursor.fetchall()
     ]
+
+
+def _view_columns(connection: Any, view_name: str) -> set[str]:
+    return {
+        str(row[1])
+        for row in connection.execute("PRAGMA table_info('%s')" % view_name).fetchall()
+    }
+
+
+def _gwas_column(
+    columns: set[str], *candidates: str, fallback: str = "CAST(NULL AS VARCHAR)"
+) -> str:
+    for candidate in candidates:
+        if candidate in columns:
+            return "gwas.%s" % candidate
+    return fallback
+
+
+def _gwas_coalesce(
+    columns: set[str], candidates: Tuple[str, ...], fallback: str
+) -> str:
+    expressions = [
+        "gwas.%s" % candidate for candidate in candidates if candidate in columns
+    ]
+    if not expressions:
+        return fallback
+    return "COALESCE(%s)" % ", ".join(expressions + [fallback])
+
+
+def _gwas_projection(columns: set[str]) -> str:
+    if "study_pmids" in columns:
+        study_pmids = "gwas.study_pmids"
+    elif "pubmed_id" in columns:
+        study_pmids = (
+            "CASE WHEN gwas.pubmed_id IS NULL THEN []::VARCHAR[] "
+            "ELSE [CAST(gwas.pubmed_id AS VARCHAR)] END"
+        )
+    else:
+        study_pmids = "[]::VARCHAR[]"
+
+    return """
+        gwas.variant_id,
+        %s AS rsid,
+        %s AS gene,
+        %s AS chrom,
+        %s AS pos,
+        %s AS ref,
+        %s AS alt,
+        gwas.trait,
+        gwas.effect_allele,
+        gwas.effect_size,
+        gwas.effect_type,
+        gwas.p_value,
+        %s AS source,
+        %s AS study_pmids,
+        %s AS study_accession,
+        %s AS source_version,
+        %s AS effect_allele_in_call
+    """ % (
+        _gwas_coalesce(columns, ("rsid",), "person_linked.rsid"),
+        _gwas_coalesce(
+            columns,
+            ("gene", "gene_symbol", "mapped_gene", "reported_gene"),
+            "person_linked.gene",
+        ),
+        _gwas_coalesce(columns, ("chrom", "variant_chrom"), "person_linked.chrom"),
+        _gwas_coalesce(columns, ("pos", "variant_pos"), "person_linked.pos"),
+        _gwas_coalesce(columns, ("ref",), "person_linked.ref"),
+        _gwas_coalesce(columns, ("alt",), "person_linked.alt"),
+        _gwas_column(columns, "source"),
+        study_pmids,
+        _gwas_column(columns, "study_accession"),
+        _gwas_column(columns, "source_version", "catalog_version"),
+        _gwas_column(
+            columns,
+            "effect_allele_in_call",
+            fallback="CAST(NULL AS BOOLEAN)",
+        ),
+    )
 
 
 def _variant_projection() -> str:
@@ -732,43 +824,51 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
                 hits.extend(_rows(cursor, "trait_variants"))
 
         if "gwas_associations" in available and has_trait_associations:
+            gwas_columns = _view_columns(connection, "gwas_associations")
+            join_predicate = "gwas.variant_id = person_linked.variant_id"
+            if "rsid" in gwas_columns:
+                join_predicate += """
+                    OR (
+                        gwas.rsid IS NOT NULL
+                        AND gwas.rsid = person_linked.rsid
+                    )
+                """
+            term_columns = ["trait"] + [
+                column
+                for column in ("mapped_trait", "reported_trait")
+                if column in gwas_columns
+            ]
+            term_predicate = " OR ".join(
+                "lower(COALESCE(CAST(gwas.%s AS VARCHAR), '')) "
+                "LIKE '%%' || lower(?) || '%%'" % column
+                for column in term_columns
+            )
             cursor = connection.execute(
                 """
                 WITH person_linked AS (
-                    SELECT DISTINCT variant_id, rsid
+                    SELECT DISTINCT variant_id, rsid, chrom, pos, ref, alt,
+                                    gene.symbol AS gene
                     FROM variants
                     WHERE trait_associations.is_gwas_hit
                       AND EXISTS (
                           SELECT 1
                           FROM UNNEST(trait_associations.traits) AS annotation(value)
-                          WHERE lower(value) LIKE '%' || lower(?) || '%'
+                          WHERE lower(value) LIKE '%%' || lower(?) || '%%'
                       )
                 )
-                SELECT DISTINCT
-                       gwas.variant_id, gwas.rsid, gwas.gene, gwas.chrom,
-                       gwas.pos, gwas.ref, gwas.alt, gwas.trait,
-                       gwas.effect_allele, gwas.effect_size, gwas.effect_type,
-                       gwas.p_value, gwas.source, gwas.pubmed_id,
-                       gwas.study_accession, gwas.catalog_version
+                SELECT DISTINCT %s
                 FROM gwas_associations AS gwas
                 JOIN person_linked
-                  ON gwas.variant_id = person_linked.variant_id
-                  OR (
-                      gwas.rsid IS NOT NULL
-                      AND gwas.rsid = person_linked.rsid
-                  )
-                WHERE lower(gwas.trait) LIKE '%' || lower(?) || '%'
-                   OR lower(COALESCE(gwas.mapped_trait, '')) LIKE '%' || lower(?) || '%'
-                   OR lower(COALESCE(gwas.reported_trait, '')) LIKE '%' || lower(?) || '%'
-                ORDER BY gwas.rsid, gwas.trait
+                  ON (%s)
+                WHERE %s
+                ORDER BY rsid, trait
                 LIMIT 25
-                """,
-                [
-                    normalized_query,
-                    normalized_query,
-                    normalized_query,
-                    normalized_query,
-                ],
+                """ % (
+                    _gwas_projection(gwas_columns),
+                    join_predicate,
+                    term_predicate,
+                ),
+                [normalized_query] * (1 + len(term_columns)),
             )
             hits.extend(_rows(cursor, "gwas"))
 

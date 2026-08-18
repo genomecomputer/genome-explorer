@@ -45,12 +45,6 @@ PAGE = r'''<!doctype html>
     }
     .mark svg { width: 19px; height: 19px; }
     .header-actions { display: flex; align-items: center; gap: 9px; }
-    .privacy {
-      display: inline-flex; align-items: center; gap: 8px; padding: 8px 11px;
-      color: var(--accent-dark); background: var(--accent-soft); border: 1px solid #cde4d6;
-      border-radius: 999px; font-size: 13px; font-weight: 680;
-    }
-    .privacy-dot { width: 7px; height: 7px; border-radius: 50%; background: #269663; box-shadow: 0 0 0 4px rgba(38,150,99,.10); }
     .quit-button {
       padding: 8px 11px; color: var(--muted); background: rgba(255,255,255,.7);
       border: 1px solid var(--line); border-radius: 999px; font-size: 13px; font-weight: 680; cursor: pointer;
@@ -147,6 +141,13 @@ PAGE = r'''<!doctype html>
     .search-button:hover { background: var(--accent-dark); }
     .search-button:active { transform: translateY(1px); }
     .search-button:disabled { cursor: wait; opacity: .7; }
+    .featured-searches { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .featured-searches > span { margin-right: 2px; color: var(--muted); font-size: 13px; }
+    .featured-search {
+      padding: 8px 11px; color: #3d4e46; background: rgba(255,255,255,.75); border: 1px solid var(--line);
+      border-radius: 999px; font-size: 13px; cursor: pointer;
+    }
+    .featured-search:hover { color: var(--accent-dark); border-color: #afcbbd; background: var(--accent-soft); }
     .examples { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
     .examples > span { margin-right: 2px; color: var(--muted); font-size: 13px; }
     .example {
@@ -254,6 +255,39 @@ PAGE = r'''<!doctype html>
     .count { padding: 3px 7px; color: var(--accent-dark); background: var(--accent-soft); border-radius: 999px; font-size: 11px; }
     .cards { display: grid; gap: 11px; }
     .section-variants .cards, .section-trait_variants .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .record-list { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; }
+    .record-list-head, .record-row-summary {
+      display: grid; align-items: center; gap: 14px; padding: 0 15px;
+    }
+    .record-layout-trait_variants .record-list-head, .record-layout-trait_variants .record-row-summary {
+      grid-template-columns: minmax(100px, .85fr) minmax(82px, .65fr) minmax(90px, .8fr) minmax(210px, 1.7fr) minmax(90px, .72fr) 14px;
+    }
+    .record-layout-variants .record-list-head, .record-layout-variants .record-row-summary {
+      grid-template-columns: minmax(130px, 1.2fr) minmax(90px, .7fr) minmax(100px, .9fr) minmax(105px, .75fr) 14px;
+    }
+    .record-layout-gwas .record-list-head, .record-layout-gwas .record-row-summary {
+      grid-template-columns: minmax(220px, 1.8fr) minmax(110px, .75fr) minmax(120px, 1fr) minmax(105px, .72fr) 14px;
+    }
+    .record-list-head {
+      min-height: 39px; color: var(--muted); background: var(--soft); border-bottom: 1px solid var(--line);
+      font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+    }
+    .record-row { border-bottom: 1px solid var(--line); }
+    .record-row:last-child { border-bottom: 0; }
+    .record-row-summary {
+      min-height: 54px; padding-top: 9px; padding-bottom: 9px; list-style: none; cursor: pointer;
+    }
+    .record-row-summary::-webkit-details-marker { display: none; }
+    .record-row-summary:hover { background: var(--soft); }
+    .record-row[open] > .record-row-summary { background: #f4f8f5; border-bottom: 1px solid var(--line); }
+    .record-row-cell { min-width: 0; color: #495950; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+    .record-row-value { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+    .record-row-primary { color: var(--ink); font-size: 13px; font-weight: 760; }
+    .record-row-primary .record-row-value { -webkit-line-clamp: 1; }
+    .record-row-arrow { color: var(--accent); font-size: 17px; text-align: center; transition: transform .15s ease; }
+    .record-row[open] .record-row-arrow { transform: rotate(90deg); }
+    .record-row-details { padding: 16px 15px 18px; background: rgba(247,250,248,.72); }
+    .record-row-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 20px; margin: 0; }
     .result-disclosure {
       overflow: hidden; background: rgba(255,255,255,.75); border: 1px solid var(--line); border-radius: 14px;
     }
@@ -266,10 +300,19 @@ PAGE = r'''<!doctype html>
     .result-disclosure[open] > summary::after { content: "Hide"; }
     .result-disclosure .section-title { margin: 0; }
     .result-disclosure > .cards { padding: 0 14px 14px; }
-    .more-results { margin-top: 11px; }
-    .more-results > summary { color: var(--accent); font-size: 13px; font-weight: 720; }
-    .more-results > summary::after { content: "+"; font-size: 18px; font-weight: 450; }
-    .more-results[open] > summary::after { content: "−"; }
+    .result-disclosure > .paginated-results { padding: 0 14px 14px; }
+    .result-pagination {
+      display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 12px;
+      padding-top: 12px; border-top: 1px solid var(--line);
+    }
+    .pagination-range { color: var(--muted); font-size: 12px; }
+    .pagination-actions { display: flex; gap: 7px; }
+    .pagination-button {
+      min-height: 36px; padding: 0 12px; color: var(--accent-dark); background: var(--surface);
+      border: 1px solid var(--line); border-radius: 9px; font-size: 12px; font-weight: 720; cursor: pointer;
+    }
+    .pagination-button:hover:not(:disabled) { border-color: #a9c9b8; background: var(--accent-soft); }
+    .pagination-button:disabled { color: #9ba8a1; cursor: default; opacity: .7; }
     .card { padding: 23px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 5px 20px rgba(25,54,43,.045); }
     .record-type { margin-bottom: 8px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
     .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
@@ -311,8 +354,6 @@ PAGE = r'''<!doctype html>
     @media (max-width: 760px) {
       .shell { width: min(100% - 24px, 1040px); padding-top: 18px; }
       main { padding-top: 48px; }
-      .privacy { font-size: 0; }
-      .privacy-dot { margin: 3px; }
       .way-grid, .secondary-tools { grid-template-columns: 1fr; }
       .way { min-height: 0; }
       .topic-library-head { align-items: flex-start; flex-direction: column; gap: 8px; }
@@ -322,6 +363,19 @@ PAGE = r'''<!doctype html>
       .directory-nav-button { flex: 0 0 auto; width: auto; }
       .directory-toolbar { grid-template-columns: 1fr; }
       .section-variants .cards, .section-trait_variants .cards { grid-template-columns: 1fr; }
+      .record-list-head { display: none; }
+      .record-row-summary, .record-layout-trait_variants .record-row-summary,
+      .record-layout-variants .record-row-summary, .record-layout-gwas .record-row-summary {
+        grid-template-columns: minmax(0, 1fr) auto; gap: 7px 14px; padding-top: 13px; padding-bottom: 13px;
+      }
+      .record-row-cell { grid-column: 1; display: grid; grid-template-columns: 105px minmax(0, 1fr); gap: 10px; }
+      .record-row-cell::before {
+        content: attr(data-label); color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+      }
+      .record-row-primary { display: block; font-size: 14px; }
+      .record-row-primary::before { content: none; }
+      .record-row-arrow { grid-column: 2; grid-row: 1; }
+      .record-row-fields { grid-template-columns: 1fr 1fr; }
       .technical-fields { grid-template-columns: 1fr 1fr; }
       .open-card { grid-template-columns: auto 1fr; }
       .choose-button { grid-column: 1 / -1; }
@@ -335,7 +389,8 @@ PAGE = r'''<!doctype html>
       .search-panel { padding: 7px; }
       input[type="search"] { padding: 14px 12px; font-size: 15px; }
       .search-button { padding: 0 13px; font-size: 14px; }
-      .simple-fields, .technical-fields, .bundle-facts { grid-template-columns: 1fr; }
+      .simple-fields, .technical-fields, .bundle-facts, .record-row-fields { grid-template-columns: 1fr; }
+      .record-row-cell { grid-template-columns: 90px minmax(0, 1fr); }
       .results-head { align-items: flex-start; flex-direction: column; gap: 5px; }
       .bundle-summary { display: none; }
       .welcome { padding-top: 52px; }
@@ -364,7 +419,6 @@ PAGE = r'''<!doctype html>
         <span>Genome Explorer</span>
       </div>
       <div class="header-actions">
-        <div class="privacy"><span class="privacy-dot"></span>Stays on this computer</div>
         <button class="quit-button" id="bundles-button" type="button" hidden>Bundles</button>
         <button class="quit-button" id="quit-button" type="button">Quit</button>
       </div>
@@ -417,39 +471,48 @@ PAGE = r'''<!doctype html>
           <button class="search-button" id="search-button" type="submit">Search</button>
         </form>
       </div>
+      <div class="featured-searches" aria-label="Popular searches">
+        <span>Popular searches</span>
+        <button class="featured-search" type="button" data-query="MTHFR">MTHFR</button>
+        <button class="featured-search" type="button" data-query="Ehlers-Danlos">Ehlers-Danlos syndrome</button>
+        <button class="featured-search" type="button" data-query="Parkinson">Parkinson's disease</button>
+        <button class="featured-search" type="button" data-query="primary immunodeficiency">Primary immunodeficiency</button>
+        <button class="featured-search" type="button" data-query="clopidogrel">Clopidogrel</button>
+        <button class="featured-search" type="button" data-query="cholesterol">Cholesterol</button>
+      </div>
+      <div class="secondary-tools">
+        <details class="disclosure">
+          <summary>Looking for a specific gene or variant?</summary>
+          <div class="disclosure-body">
+            <p>You can search a gene name, rsID, or genomic position when you know the exact identifier.</p>
+            <div class="examples technical-examples">
+              <button class="example" type="button" data-query="CYP2C19">CYP2C19</button>
+              <button class="example" type="button" data-query="rs11188082">rs11188082</button>
+              <button class="example" type="button" data-query="chr10:94808278">chr10:94808278</button>
+            </div>
+          </div>
+        </details>
+
+        <details class="disclosure" id="bundle-details">
+          <summary><span>Bundle details</span><span class="bundle-summary" id="bundle-summary">Verified and ready</span></summary>
+          <div class="disclosure-body">
+            <dl class="bundle-facts">
+              <div class="bundle-fact"><dt>Nickname</dt><dd id="bundle-nickname">Loading</dd></div>
+              <div class="bundle-fact"><dt>Status</dt><dd id="validation">Verified</dd></div>
+              <div class="bundle-fact"><dt>Genome spec</dt><dd id="spec-version">Loading</dd></div>
+              <div class="bundle-fact"><dt>Genome reference</dt><dd id="build">Loading</dd></div>
+              <div class="bundle-fact"><dt>Bundle date</dt><dd id="snapshot">Loading</dd></div>
+              <div class="bundle-fact"><dt>Local data</dt><dd id="stored">Loading</dd></div>
+            </dl>
+          </div>
+        </details>
+      </div>
       <section class="topic-library" aria-labelledby="topic-library-title">
         <div class="topic-library-head">
           <h2 id="topic-library-title">Browse common topics</h2>
           <div class="topic-summary" id="topic-summary"></div>
         </div>
         <div class="topic-catalog" id="topic-catalog"></div>
-
-        <div class="secondary-tools">
-          <details class="disclosure">
-            <summary>Looking for a specific gene or variant?</summary>
-            <div class="disclosure-body">
-              <p>You can search a gene name, rsID, or genomic position when you know the exact identifier.</p>
-              <div class="examples technical-examples">
-                <button class="example" type="button" data-query="CYP2C19">CYP2C19</button>
-                <button class="example" type="button" data-query="rs11188082">rs11188082</button>
-                <button class="example" type="button" data-query="chr10:94808278">chr10:94808278</button>
-              </div>
-            </div>
-          </details>
-
-          <details class="disclosure" id="bundle-details">
-            <summary><span>Bundle details</span><span class="bundle-summary" id="bundle-summary">Verified and ready</span></summary>
-            <div class="disclosure-body">
-              <dl class="bundle-facts">
-                <div class="bundle-fact"><dt>Nickname</dt><dd id="bundle-nickname">Loading</dd></div>
-                <div class="bundle-fact"><dt>Status</dt><dd id="validation">Verified</dd></div>
-                <div class="bundle-fact"><dt>Genome reference</dt><dd id="build">Loading</dd></div>
-                <div class="bundle-fact"><dt>Bundle date</dt><dd id="snapshot">Loading</dd></div>
-                <div class="bundle-fact"><dt>Local data</dt><dd id="stored">Loading</dd></div>
-              </dl>
-            </div>
-          </details>
-        </div>
       </section>
 
       <section class="results" id="results" hidden aria-live="polite">
@@ -511,7 +574,9 @@ PAGE = r'''<!doctype html>
       reference_population: "Comparison group recorded in bundle", training_source: "Training source",
       training_date: "Training date", effect_allele: "Effect allele", effect_size: "Effect size",
       effect_type: "Effect type", p_value: "P value", source: "Recorded source", pubmed_id: "PubMed",
-      study_accession: "Study accession", catalog_version: "Catalog version",
+      study_pmids: "Research references", study_accession: "Study accession",
+      catalog_version: "Catalog version", source_version: "Source version",
+      effect_allele_in_call: "Effect allele recorded in this genome",
       start_pos: "Gene start", end_pos: "Gene end", variant_count: "Variants recorded",
       actionable_count: "Actionable records"
     };
@@ -539,7 +604,7 @@ PAGE = r'''<!doctype html>
       pharmacogenomics: [],
       polygenic_scores: ["percentile", "reference_population"],
       trait_variants: ["called_alleles", "matched_traits", "gene", "call_confidence", "study_pmids"],
-      gwas: ["rsid", "gene", "source", "pubmed_id", "study_accession"]
+      gwas: ["rsid", "gene", "source", "study_pmids", "study_accession"]
     };
 
     const topicKinds = {
@@ -875,7 +940,7 @@ PAGE = r'''<!doctype html>
       name.textContent = entry.nickname;
       const meta = document.createElement("p");
       meta.className = "bundle-meta";
-      meta.textContent = `${entry.file_name} · ${entry.genome_build} · ${formatBundleDate(entry.generated_at)}`;
+      meta.textContent = `${entry.file_name} · Genome spec v${entry.schema_version} · ${entry.genome_build} · ${formatBundleDate(entry.generated_at)}`;
       body.append(name, meta);
       if (!entry.available) {
         const unavailable = document.createElement("p");
@@ -934,6 +999,7 @@ PAGE = r'''<!doctype html>
       document.querySelector("#active-bundle-name").textContent = nickname;
       document.querySelector("#bundle-nickname").textContent = nickname;
       document.querySelector("#validation").textContent = cached ? "Previously verified" : "Verified";
+      document.querySelector("#spec-version").textContent = `v${status.schema_version}`;
       document.querySelector("#build").textContent = status.genome_build;
       document.querySelector("#snapshot").textContent = new Date(status.generated_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
       document.querySelector("#stored").textContent = formatBytes(status.stored_bytes);
@@ -1365,6 +1431,155 @@ PAGE = r'''<!doctype html>
       return cards;
     }
 
+    const compactRecordSections = new Set(["variants", "trait_variants", "gwas"]);
+
+    function compactValue(key, value) {
+      if (value === null || value === undefined || value === "") return "Not recorded";
+      if (key === "called_alleles" && Array.isArray(value)) return value.join(" / ");
+      if (key === "source" && value === "gwas_catalog") return "GWAS Catalog";
+      return formatValue(value);
+    }
+
+    function recordColumnsFor(hit) {
+      if (hit.section === "trait_variants") {
+        return [
+          { label: "Variant", key: hit.rsid ? "rsid" : "variant_id", value: hit.rsid || hit.variant_id },
+          { label: "Genotype", key: "called_alleles", value: hit.called_alleles },
+          { label: "Gene", key: "gene", value: hit.gene },
+          { label: "Matching topic", key: "matched_traits", value: hit.matched_traits },
+          { label: "Call confidence", key: "call_confidence", value: hit.call_confidence }
+        ];
+      }
+      if (hit.section === "gwas") {
+        return [
+          { label: "Research topic", key: "trait", value: hit.trait },
+          { label: "Variant", key: hit.rsid ? "rsid" : "variant_id", value: hit.rsid || hit.variant_id },
+          { label: "Gene", key: "gene", value: hit.gene },
+          { label: "Source", key: "source", value: hit.source }
+        ];
+      }
+      return [
+        { label: "Variant", key: hit.rsid ? "rsid" : "variant_id", value: hit.rsid || hit.variant_id },
+        { label: "Zygosity", key: "zygosity", value: hit.zygosity },
+        { label: "Gene", key: "gene", value: hit.gene },
+        { label: "Call confidence", key: "call_confidence", value: hit.call_confidence }
+      ];
+    }
+
+    function recordRowFor(hit) {
+      const row = document.createElement("details");
+      row.className = "record-row";
+      const summary = document.createElement("summary");
+      summary.className = "record-row-summary";
+      const columns = recordColumnsFor(hit);
+      columns.forEach((column, index) => {
+        const cell = document.createElement("span");
+        cell.className = `record-row-cell${index === 0 ? " record-row-primary" : ""}`;
+        cell.dataset.label = column.label;
+        const value = document.createElement("span");
+        value.className = "record-row-value";
+        value.textContent = compactValue(column.key, column.value);
+        value.title = value.textContent;
+        cell.append(value);
+        summary.append(cell);
+      });
+      const arrow = document.createElement("span");
+      arrow.className = "record-row-arrow";
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = "›";
+      summary.append(arrow);
+
+      const details = document.createElement("div");
+      details.className = "record-row-details";
+      const fields = document.createElement("dl");
+      fields.className = "record-row-fields";
+      const shownKeys = new Set(columns.map(column => column.key));
+      Object.entries(hit).forEach(([key, value]) => {
+        if (key === "section" || shownKeys.has(key) || value === null || value === undefined || value === "") return;
+        fields.append(fieldElement(key, value, hit.section));
+      });
+      details.append(fields);
+      row.append(summary, details);
+      return row;
+    }
+
+    function recordListFor(hits, sectionName) {
+      const list = document.createElement("div");
+      list.className = `record-list record-layout-${sectionName}`;
+      const head = document.createElement("div");
+      head.className = "record-list-head";
+      head.setAttribute("aria-hidden", "true");
+      recordColumnsFor(hits[0]).forEach(column => {
+        const label = document.createElement("span");
+        label.textContent = column.label;
+        head.append(label);
+      });
+      head.append(document.createElement("span"));
+      list.append(head, ...hits.map(recordRowFor));
+      return list;
+    }
+
+    function recordsFor(hits, query, sectionName) {
+      return compactRecordSections.has(sectionName)
+        ? recordListFor(hits, sectionName)
+        : cardsFor(hits, query);
+    }
+
+    function paginatedResults(hits, query, sectionName) {
+      const pageSize = compactRecordSections.has(sectionName) ? 10 : 4;
+      if (hits.length <= pageSize) return recordsFor(hits, query, sectionName);
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "paginated-results";
+      const pageContent = document.createElement("div");
+      pageContent.className = "result-page";
+      const pagination = document.createElement("nav");
+      pagination.className = "result-pagination";
+      pagination.setAttribute("aria-label", `${sectionLabels[sectionName] || sectionName} pages`);
+      const range = document.createElement("span");
+      range.className = "pagination-range";
+      range.setAttribute("aria-live", "polite");
+      const actions = document.createElement("div");
+      actions.className = "pagination-actions";
+      const previous = document.createElement("button");
+      previous.className = "pagination-button";
+      previous.type = "button";
+      previous.textContent = "Previous";
+      previous.setAttribute("aria-label", `Previous page of ${sectionLabels[sectionName] || sectionName}`);
+      const next = document.createElement("button");
+      next.className = "pagination-button";
+      next.type = "button";
+      next.textContent = "Next";
+      next.setAttribute("aria-label", `Next page of ${sectionLabels[sectionName] || sectionName}`);
+      actions.append(previous, next);
+      pagination.append(range, actions);
+      wrapper.append(pageContent, pagination);
+
+      let page = 0;
+      const pageCount = Math.ceil(hits.length / pageSize);
+      const renderPage = ({ scroll = false } = {}) => {
+        const start = page * pageSize;
+        const end = Math.min(start + pageSize, hits.length);
+        pageContent.replaceChildren(recordsFor(hits.slice(start, end), query, sectionName));
+        range.textContent = `${start + 1}-${end} of ${hits.length}`;
+        previous.disabled = page === 0;
+        next.disabled = page === pageCount - 1;
+        if (scroll) pageContent.scrollIntoView({ behavior: "smooth", block: "start" });
+      };
+      previous.addEventListener("click", () => {
+        if (page === 0) return;
+        page -= 1;
+        renderPage({ scroll: true });
+      });
+      next.addEventListener("click", () => {
+        if (page === pageCount - 1) return;
+        page += 1;
+        renderPage({ scroll: true });
+      });
+      renderPage();
+      return wrapper;
+    }
+
     function renderSearch(payload) {
       results.hidden = false;
       const count = payload.hits.length;
@@ -1406,21 +1621,10 @@ PAGE = r'''<!doctype html>
           disclosure.className = "result-disclosure";
           const summary = document.createElement("summary");
           summary.append(sectionHeading(sectionName, hits.length, showCount));
-          disclosure.append(summary, cardsFor(hits, payload.query));
+          disclosure.append(summary, paginatedResults(hits, payload.query, sectionName));
           section.append(disclosure);
         } else {
-          const visibleHits = hits.slice(0, sectionName === "pharmacogenomics" ? hits.length : 4);
-          section.append(sectionHeading(sectionName, hits.length, showCount), cardsFor(visibleHits, payload.query));
-          if (visibleHits.length < hits.length) {
-            const more = document.createElement("details");
-            more.className = "result-disclosure more-results";
-            const summary = document.createElement("summary");
-            summary.textContent = hasPersonLinkedRecords && (sectionName === "trait_variants" || sectionName === "gwas")
-              ? "Show more related records"
-              : `Show ${hits.length - visibleHits.length} more recorded matches`;
-            more.append(summary, cardsFor(hits.slice(visibleHits.length), payload.query));
-            section.append(more);
-          }
+          section.append(sectionHeading(sectionName, hits.length, showCount), paginatedResults(hits, payload.query, sectionName));
         }
         content.append(section);
       });
@@ -1465,6 +1669,13 @@ PAGE = r'''<!doctype html>
     document.querySelectorAll(".example").forEach(example => {
       example.addEventListener("click", () => {
         input.value = example.dataset.query || example.textContent;
+        search(input.value);
+      });
+    });
+
+    document.querySelectorAll(".featured-search").forEach(shortcut => {
+      shortcut.addEventListener("click", () => {
+        input.value = shortcut.dataset.query || shortcut.textContent;
         search(input.value);
       });
     });

@@ -6,6 +6,7 @@ import path from "node:path";
 const repositoryRoot = path.resolve(__dirname, "..");
 const sampleBundle = process.env.GENOME_EXPLORER_TEST_BUNDLE;
 const clinicalBundle = process.env.GENOME_EXPLORER_CLINICAL_TEST_BUNDLE;
+const currentBundle = process.env.GENOME_EXPLORER_CURRENT_TEST_BUNDLE;
 
 function processIsAlive(pid: number): boolean {
   try {
@@ -47,6 +48,7 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     firstApp = await electron.launch(launchOptions);
     const firstWindow = await firstApp.firstWindow();
     await expect(firstWindow.getByRole("heading", { name: "Explore your genome bundle privately." })).toBeVisible();
+    await expect(firstWindow.getByText("Stays on this computer", { exact: true })).toHaveCount(0);
     await expect(firstWindow.locator("#quit-button")).toBeHidden();
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       mkdirSync(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, { recursive: true });
@@ -58,15 +60,28 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await firstWindow.getByRole("button", { name: "Add genome bundle" }).click();
     await expect(firstWindow.locator("#explorer")).toBeVisible({ timeout: 90_000 });
     await expect(firstWindow.locator("#validation")).toHaveText("Verified");
+    await expect(firstWindow.locator("#spec-version")).toHaveText("v1.0.0");
     await expect(firstWindow.locator(".topic-browser")).toBeVisible();
     await expect(firstWindow.getByRole("tab", { name: /Results in this bundle/ })).toHaveAttribute("aria-selected", "true");
     await expect(firstWindow.locator(".directory-row").first()).toBeVisible();
+    const searchToolsComeBeforeLibrary = await firstWindow.evaluate(() => {
+      const tools = document.querySelector(".secondary-tools");
+      const library = document.querySelector(".topic-library");
+      return Boolean(tools && library && tools.compareDocumentPosition(library) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(searchToolsComeBeforeLibrary).toBe(true);
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       await firstWindow.screenshot({
         path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "topic-library.png"),
         fullPage: true,
       });
     }
+    const popularSearches = firstWindow.locator(".featured-search");
+    await expect(popularSearches).toHaveCount(6);
+    const geneResponse = firstWindow.waitForResponse((response) => response.url().endsWith("/api/search"));
+    await firstWindow.getByRole("button", { name: "MTHFR", exact: true }).click();
+    expect((await geneResponse).ok()).toBe(true);
+    await expect(firstWindow.locator(".section-genes .card").first()).toBeVisible();
     await firstWindow.getByRole("tab", { name: /Conditions/ }).click();
     const pcosTopic = firstWindow.getByRole("button", { name: "Search this bundle for PCOS" });
     await expect(pcosTopic.locator(".topic-indicator-value")).toHaveText("85th percentile");
@@ -85,13 +100,25 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await firstWindow.mouse.click(cholesterolBounds.x + 6, cholesterolBounds.y + cholesterolBounds.height / 2);
     await expect(firstWindow.getByText("Related variants", { exact: true }).last()).toBeVisible();
     await expect(firstWindow.getByText("High density lipoprotein cholesterol levels").first()).toBeVisible();
-    const firstPersonalRecord = firstWindow.locator(".section-trait_variants .card").first();
-    await expect(firstPersonalRecord.locator(".record-type, .recorded-summary, .meaning-note")).toHaveCount(0);
+    const firstPersonalRecord = firstWindow.locator(".section-trait_variants .record-row").first();
+    await expect(firstWindow.locator(".section-trait_variants .card")).toHaveCount(0);
     await expect(firstPersonalRecord.getByText("G / C")).toBeVisible();
+    await firstPersonalRecord.locator(":scope > summary").click();
     await expect(firstPersonalRecord.getByRole("link", { name: "PubMed 34887591" })).toHaveAttribute(
       "href",
       "https://pubmed.ncbi.nlm.nih.gov/34887591/",
     );
+    const relatedPagination = firstWindow.locator(".section-trait_variants .result-pagination");
+    await expect(relatedPagination.locator(".pagination-range")).toHaveText("1-10 of 25");
+    await expect(firstWindow.locator(".section-trait_variants .record-row")).toHaveCount(10);
+    await expect(firstWindow.getByText("Show more related records", { exact: true })).toHaveCount(0);
+    const firstPageRecord = await firstWindow.locator(".section-trait_variants .record-row").first().textContent();
+    await relatedPagination.getByRole("button", { name: "Next page of Related variants" }).click();
+    await expect(relatedPagination.locator(".pagination-range")).toHaveText("11-20 of 25");
+    const secondPageRecord = await firstWindow.locator(".section-trait_variants .record-row").first().textContent();
+    expect(secondPageRecord).not.toBe(firstPageRecord);
+    await relatedPagination.getByRole("button", { name: "Previous page of Related variants" }).click();
+    await expect(relatedPagination.locator(".pagination-range")).toHaveText("1-10 of 25");
     await expect(firstWindow.getByText("Research sources")).toBeVisible();
     await expect(firstWindow.getByText(/has not been presented as a match/)).toHaveCount(0);
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
@@ -99,10 +126,21 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
         path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "person-linked-topic.png"),
         fullPage: true,
       });
+      const desktopViewport = firstWindow.viewportSize();
+      await firstWindow.setViewportSize({ width: 700, height: 900 });
+      await expect(firstWindow.locator(".section-trait_variants .record-list-head")).toBeHidden();
+      await firstWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "person-linked-topic-narrow.png"),
+        fullPage: true,
+      });
+      if (desktopViewport) await firstWindow.setViewportSize(desktopViewport);
     }
     const supportingResearch = firstWindow.locator(".section-gwas");
     await supportingResearch.locator(":scope > .result-disclosure > summary").click();
+    await expect(supportingResearch.locator(".pagination-range")).toHaveText("1-10 of 25");
+    await expect(supportingResearch.locator(".card")).toHaveCount(0);
     await expect(supportingResearch.getByText("GWAS Catalog").first()).toBeVisible();
+    await supportingResearch.locator(".record-row").first().locator(":scope > summary").click();
     await expect(supportingResearch.getByRole("link", { name: /PubMed/ }).first()).toHaveAttribute(
       "href",
       /pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/,
@@ -136,6 +174,13 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     const secondWindow = await secondApp.firstWindow();
     await expect(secondWindow.getByRole("heading", { name: "Choose a genome bundle." })).toBeVisible();
     await expect(secondWindow.locator(".bundle-item")).toHaveCount(1);
+    await expect(secondWindow.locator(".bundle-meta").first()).toContainText("Genome spec v1.0.0");
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await secondWindow.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "bundle-library.png"),
+        fullPage: true,
+      });
+    }
     await secondWindow.locator(".bundle-open").click();
     await expect(secondWindow.locator("#explorer")).toBeVisible();
     await expect(secondWindow.locator("#validation")).toHaveText("Previously verified");
@@ -199,6 +244,62 @@ test("shows clinical-grade findings with person calls and ClinVar evidence", asy
         fullPage: true,
       });
     }
+
+    const enginePid = Number.parseInt(readFileSync(pidFile, "utf8"), 10);
+    await app.close();
+    app = undefined;
+    await waitForProcessExit(enginePid);
+  } finally {
+    if (app) await app.close().catch(() => undefined);
+    rmSync(userData, { recursive: true, force: true });
+  }
+});
+
+test("opens and searches a current v1.1 bundle", async () => {
+  test.skip(!currentBundle || !existsSync(currentBundle), "Set GENOME_EXPLORER_CURRENT_TEST_BUNDLE to a synthetic v1.1 bundle.");
+
+  const userData = mkdtempSync(path.join(os.tmpdir(), "genome-explorer-current-"));
+  const pidFile = path.join(userData, "engine.pid");
+  const environment = {
+    ...process.env,
+    GENOME_EXPLORER_TEST_BUNDLE: currentBundle,
+    GENOME_EXPLORER_TEST_PID_FILE: pidFile,
+    GENOME_EXPLORER_USER_DATA: userData,
+  };
+  const executablePath = process.env.GENOME_EXPLORER_EXECUTABLE;
+  const launchOptions = executablePath
+    ? { executablePath, args: [] as string[], cwd: repositoryRoot, env: environment }
+    : { args: [repositoryRoot], cwd: repositoryRoot, env: environment };
+
+  let app: Awaited<ReturnType<typeof electron.launch>> | undefined;
+  try {
+    app = await electron.launch(launchOptions);
+    const window = await app.firstWindow();
+    await window.getByRole("button", { name: "Add genome bundle" }).click();
+    await expect(window.locator("#explorer")).toBeVisible({ timeout: 30_000 });
+    await expect(window.locator("#validation")).toHaveText("Verified");
+    await expect(window.locator("#spec-version")).toHaveText("v1.1.0");
+
+    await window.getByRole("searchbox", { name: "Search your genome bundle" }).fill("HFE");
+    const searchResponse = window.waitForResponse((response) => response.url().endsWith("/api/search"));
+    await window.getByRole("button", { name: "Search", exact: true }).click();
+    expect((await searchResponse).ok()).toBe(true);
+    await expect(window.locator("#results-title")).toHaveText("What the bundle records");
+    await expect(window.locator(".section-variants .record-row").filter({ hasText: "rs1800562" })).toBeVisible();
+    await expect(window.locator(".section-clinical_findings")).toHaveCount(0);
+
+    await window.getByRole("searchbox", { name: "Search your genome bundle" }).fill("Hemoglobin");
+    const researchResponse = window.waitForResponse((response) => response.url().endsWith("/api/search"));
+    await window.getByRole("button", { name: "Search", exact: true }).click();
+    expect((await researchResponse).ok()).toBe(true);
+    const research = window.locator(".section-gwas");
+    await expect(research.getByText("Research sources", { exact: true })).toBeVisible();
+    await research.locator(":scope > .result-disclosure > summary").click();
+    await research.locator(".record-row").first().locator(":scope > summary").click();
+    await expect(research.getByRole("link", { name: /PubMed/ }).first()).toHaveAttribute(
+      "href",
+      /pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/,
+    );
 
     const enginePid = Number.parseInt(readFileSync(pidFile, "utf8"), 10);
     await app.close();

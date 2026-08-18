@@ -119,6 +119,15 @@ class TopicIndexTest(unittest.TestCase):
             breast_cancer["personal"]["clinical_findings"],
         )
         self.assertNotIn("clinical_findings", by_id["asthma"]["record_sections"])
+        self.assertEqual(
+            by_id["ehlers-danlos-syndrome"]["query"],
+            "Ehlers-Danlos",
+        )
+        self.assertEqual(by_id["parkinsons-disease"]["query"], "Parkinson")
+        self.assertEqual(
+            by_id["primary-immunodeficiency"]["query"],
+            "primary immunodeficiency",
+        )
 
         cache = json.loads((self.workspace / TOPIC_INDEX_FILENAME).read_text())
         self.assertEqual(cache["topics"], topics)
