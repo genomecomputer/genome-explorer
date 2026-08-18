@@ -50,6 +50,7 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(firstWindow.getByRole("heading", { name: "Explore your genome bundle privately." })).toBeVisible();
     await expect(firstWindow.getByText("Stays on this computer", { exact: true })).toHaveCount(0);
     await expect(firstWindow.locator("#quit-button")).toBeHidden();
+    await expect(firstWindow.locator("#sidebar-context")).toBeHidden();
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       mkdirSync(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, { recursive: true });
       await firstWindow.screenshot({
@@ -61,28 +62,40 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(firstWindow.locator("#explorer")).toBeVisible({ timeout: 90_000 });
     await expect(firstWindow.locator("#validation")).toHaveText("Verified");
     await expect(firstWindow.locator("#spec-version")).toHaveText("v1.0.0");
+    await expect(firstWindow.locator("#sidebar-context")).toBeVisible();
+    await expect(firstWindow.locator("#sidebar-bundle-name")).toHaveText("sample");
+    await expect(firstWindow.locator("#build")).toHaveText("GRCh38");
+    await expect(firstWindow.locator("#view-search")).toBeVisible();
+    await expect(firstWindow.locator("#view-library")).toBeHidden();
+    await expect(firstWindow.locator("#results")).toBeHidden();
+    await expect(firstWindow).toHaveURL(/#search$/);
+    await firstWindow.getByRole("tab", { name: /Personal results/ }).click();
+    await expect(firstWindow.locator("#view-search")).toBeHidden();
+    await expect(firstWindow.locator("#view-library")).toBeVisible();
     await expect(firstWindow.locator(".topic-browser")).toBeVisible();
-    await expect(firstWindow.getByRole("tab", { name: /Results in this bundle/ })).toHaveAttribute("aria-selected", "true");
+    await expect(firstWindow.getByRole("tab", { name: /Personal results/ })).toHaveAttribute("aria-selected", "true");
     await expect(firstWindow.locator(".directory-row").first()).toBeVisible();
-    const searchToolsComeBeforeLibrary = await firstWindow.evaluate(() => {
-      const tools = document.querySelector(".secondary-tools");
-      const library = document.querySelector(".topic-library");
-      return Boolean(tools && library && tools.compareDocumentPosition(library) & Node.DOCUMENT_POSITION_FOLLOWING);
-    });
-    expect(searchToolsComeBeforeLibrary).toBe(true);
+    await expect(firstWindow).toHaveURL(/#personal$/);
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       await firstWindow.screenshot({
         path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "topic-library.png"),
         fullPage: true,
       });
     }
+    await firstWindow.getByRole("button", { name: /Genome search/ }).click();
+    await expect(firstWindow.locator("#view-search")).toBeVisible();
     const popularSearches = firstWindow.locator(".featured-search");
     await expect(popularSearches).toHaveCount(6);
     const geneResponse = firstWindow.waitForResponse((response) => response.url().endsWith("/api/search"));
     await firstWindow.getByRole("button", { name: "MTHFR", exact: true }).click();
     expect((await geneResponse).ok()).toBe(true);
+    await expect(firstWindow.locator("#results")).toBeVisible();
+    await expect(firstWindow.locator("#view-search")).toBeHidden();
+    await expect(firstWindow).toHaveURL(/#results$/);
     await expect(firstWindow.locator(".section-genes .card").first()).toBeVisible();
     await firstWindow.getByRole("tab", { name: /Conditions/ }).click();
+    await expect(firstWindow.locator("#results")).toBeHidden();
+    await expect(firstWindow.locator("#view-library")).toBeVisible();
     const pcosTopic = firstWindow.getByRole("button", { name: "Search this bundle for PCOS" });
     await expect(pcosTopic.locator(".topic-indicator-value")).toHaveText("85th percentile");
     await firstWindow.getByRole("tab", { name: /Traits/ }).click();
@@ -94,10 +107,11 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await lactoseTopic.click();
     await expect(firstWindow.locator("#results-title")).toHaveText("No personal result recorded");
     await expect(firstWindow.locator(".section-gwas")).toHaveCount(0);
-    const cholesterolBounds = await cholesterolTopic.boundingBox();
-    expect(cholesterolBounds).not.toBeNull();
-    if (!cholesterolBounds) throw new Error("Cholesterol topic row has no bounding box.");
-    await firstWindow.mouse.click(cholesterolBounds.x + 6, cholesterolBounds.y + cholesterolBounds.height / 2);
+    await firstWindow.getByRole("button", { name: "← Back" }).click();
+    await expect(firstWindow.locator("#view-library")).toBeVisible();
+    await expect(firstWindow.locator("#results")).toBeHidden();
+    await expect(firstWindow).toHaveURL(/#traits$/);
+    await firstWindow.getByRole("button", { name: "Search this bundle for Cholesterol levels" }).click();
     await expect(firstWindow.getByText("Related variants", { exact: true }).last()).toBeVisible();
     await expect(firstWindow.getByText("High density lipoprotein cholesterol levels").first()).toBeVisible();
     const firstPersonalRecord = firstWindow.locator(".section-trait_variants .record-row").first();
@@ -126,14 +140,18 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
         path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "person-linked-topic.png"),
         fullPage: true,
       });
-      const desktopViewport = firstWindow.viewportSize();
+      const desktopViewport = await firstWindow.evaluate(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }));
       await firstWindow.setViewportSize({ width: 700, height: 900 });
       await expect(firstWindow.locator(".section-trait_variants .record-list-head")).toBeHidden();
       await firstWindow.screenshot({
         path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "person-linked-topic-narrow.png"),
         fullPage: true,
       });
-      if (desktopViewport) await firstWindow.setViewportSize(desktopViewport);
+      await firstWindow.setViewportSize(desktopViewport);
+      await expect(firstWindow.locator(".section-trait_variants .record-list-head")).toBeVisible();
     }
     const supportingResearch = firstWindow.locator(".section-gwas");
     await supportingResearch.locator(":scope > .result-disclosure > summary").click();
@@ -154,6 +172,7 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await firstWindow.getByRole("tab", { name: /Medications/ }).click();
     await expect(firstWindow.locator(".directory-row")).toHaveCount(15);
 
+    await firstWindow.getByRole("button", { name: /Genome search/ }).click();
     await firstWindow.getByRole("searchbox", { name: "Search your genome bundle" }).fill("CYP2C19");
     await firstWindow.getByRole("button", { name: "Search", exact: true }).click();
     await expect(firstWindow.locator("#results-title")).toHaveText("What the bundle records");
@@ -219,6 +238,7 @@ test("shows clinical-grade findings with person calls and ClinVar evidence", asy
     await window.getByRole("button", { name: "Add genome bundle" }).click();
     await expect(window.locator("#explorer")).toBeVisible({ timeout: 30_000 });
 
+    await window.getByRole("tab", { name: /Personal results/ }).click();
     const clinicalRow = window.getByRole("button", { name: "Search this bundle for Clinical findings" });
     await expect(clinicalRow.locator(".topic-indicator-value")).toHaveText("2 clinical findings");
     await clinicalRow.click();
@@ -288,6 +308,7 @@ test("opens and searches a current v1.1 bundle", async () => {
     await expect(window.locator(".section-variants .record-row").filter({ hasText: "rs1800562" })).toBeVisible();
     await expect(window.locator(".section-clinical_findings")).toHaveCount(0);
 
+    await window.getByRole("button", { name: /Genome search/ }).click();
     await window.getByRole("searchbox", { name: "Search your genome bundle" }).fill("Hemoglobin");
     const researchResponse = window.waitForResponse((response) => response.url().endsWith("/api/search"));
     await window.getByRole("button", { name: "Search", exact: true }).click();

@@ -169,24 +169,6 @@ PAGE = r'''<!doctype html>
       background: rgba(255,255,255,.86); border: 1px solid var(--line); border-radius: 16px;
       box-shadow: 0 7px 26px rgba(25,54,43,.045);
     }
-    .directory-nav { padding: 15px; background: rgba(243,247,244,.82); border-right: 1px solid var(--line); }
-    .directory-nav-label {
-      margin: 2px 8px 10px; color: var(--muted); font-size: 10px; font-weight: 800;
-      letter-spacing: .09em; text-transform: uppercase;
-    }
-    .directory-nav-list { display: grid; gap: 4px; }
-    .directory-nav-button {
-      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%;
-      padding: 10px 11px; color: #415149; background: transparent; border: 0; border-radius: 10px;
-      font-size: 13px; font-weight: 700; text-align: left; cursor: pointer;
-    }
-    .directory-nav-button:hover { background: rgba(255,255,255,.82); }
-    .directory-nav-button[aria-selected="true"] { color: var(--accent-dark); background: white; box-shadow: 0 1px 5px rgba(25,54,43,.08); }
-    .directory-nav-count {
-      min-width: 25px; padding: 3px 6px; color: var(--muted); background: rgba(101,115,109,.09);
-      border-radius: 999px; font-size: 10px; text-align: center;
-    }
-    .directory-nav-button[aria-selected="true"] .directory-nav-count { color: var(--accent-dark); background: var(--accent-soft); }
     .directory-main { min-width: 0; padding: 20px; }
     .directory-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, 260px); align-items: end; gap: 18px; margin-bottom: 20px; }
     .directory-title { margin: 0; font-size: 19px; letter-spacing: -.025em; }
@@ -237,10 +219,6 @@ PAGE = r'''<!doctype html>
     .disclosure-body { padding: 0 19px 19px; color: var(--muted); font-size: 14px; line-height: 1.55; }
     .disclosure-body p { margin: 0 0 13px; }
     .technical-examples { margin: 0; }
-    .bundle-summary { color: var(--muted); font-size: 12px; font-weight: 520; }
-    .bundle-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 20px; margin: 0; }
-    .bundle-fact dt { margin-bottom: 3px; color: var(--muted); font-size: 10px; font-weight: 760; letter-spacing: .07em; text-transform: uppercase; }
-    .bundle-fact dd { margin: 0; color: var(--ink); font-size: 13px; font-weight: 650; }
     .results { margin-top: 58px; scroll-margin-top: 28px; }
     .results[hidden] { display: none; }
     .results-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
@@ -358,9 +336,6 @@ PAGE = r'''<!doctype html>
       .way { min-height: 0; }
       .topic-library-head { align-items: flex-start; flex-direction: column; gap: 8px; }
       .topic-browser { grid-template-columns: 1fr; }
-      .directory-nav { border-right: 0; border-bottom: 1px solid var(--line); }
-      .directory-nav-list { display: flex; overflow-x: auto; padding-bottom: 2px; }
-      .directory-nav-button { flex: 0 0 auto; width: auto; }
       .directory-toolbar { grid-template-columns: 1fr; }
       .section-variants .cards, .section-trait_variants .cards { grid-template-columns: 1fr; }
       .record-list-head { display: none; }
@@ -389,10 +364,9 @@ PAGE = r'''<!doctype html>
       .search-panel { padding: 7px; }
       input[type="search"] { padding: 14px 12px; font-size: 15px; }
       .search-button { padding: 0 13px; font-size: 14px; }
-      .simple-fields, .technical-fields, .bundle-facts, .record-row-fields { grid-template-columns: 1fr; }
+      .simple-fields, .technical-fields, .record-row-fields { grid-template-columns: 1fr; }
       .record-row-cell { grid-template-columns: 90px minmax(0, 1fr); }
       .results-head { align-items: flex-start; flex-direction: column; gap: 5px; }
-      .bundle-summary { display: none; }
       .welcome { padding-top: 52px; }
       .open-card { grid-template-columns: 1fr; }
       .open-icon { width: 46px; height: 46px; }
@@ -407,6 +381,87 @@ PAGE = r'''<!doctype html>
       .directory-row .topic-indicator { grid-column: 1 / -1; grid-row: 2; text-align: left; }
       .directory-arrow { grid-column: 2; grid-row: 1; }
     }
+
+    /* Workbench layout. */
+    body { background: #edf3ef; }
+    .shell {
+      display: grid; grid-template-columns: 236px minmax(0, 1fr); width: 100%; min-height: 100vh; margin: 0; padding: 0;
+    }
+    header {
+      position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; align-items: stretch;
+      justify-content: flex-start; height: 100vh; padding: 25px 18px 22px; color: white; background: #123d2e;
+    }
+    .brand { align-items: flex-start; line-height: 1.15; }
+    .mark { flex: 0 0 auto; color: #123d2e; background: #dceee4; border-radius: 5px; box-shadow: none; }
+    .sidebar-context { display: flex; min-height: 0; flex: 1; flex-direction: column; margin-top: 38px; }
+    .sidebar-bundle { margin-top: auto; padding: 18px 9px 0; border-top: 1px solid rgba(255,255,255,.14); }
+    .sidebar-label {
+      margin: 0 0 9px; color: #91b6a5; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+    }
+    .sidebar-bundle-name { display: block; color: white; font-size: 15px; font-weight: 760; line-height: 1.3; overflow-wrap: anywhere; }
+    .sidebar-bundle-status { display: block; margin-top: 7px; color: #a9d3bf; font-size: 10px; font-weight: 720; }
+    .sidebar-bundle-meta { display: block; margin-top: 6px; color: #b9d2c6; font-size: 11px; line-height: 1.45; }
+    .sidebar-nav { display: grid; gap: 3px; margin-top: 23px; }
+    .sidebar-view-list { display: grid; gap: 3px; }
+    .sidebar-nav .sidebar-label { margin: 0 9px 7px; }
+    .sidebar-nav-button {
+      display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 7px; width: 100%;
+      min-height: 38px; padding: 0 9px; color: #c9ddd3; background: transparent; border: 0; border-radius: 5px;
+      font-size: 12px; font-weight: 680; text-align: left; cursor: pointer;
+    }
+    .sidebar-nav-button:hover { color: white; background: rgba(255,255,255,.08); }
+    .sidebar-nav-button[aria-selected="true"], .sidebar-nav-button.is-active { color: #123d2e; background: #dceee4; }
+    .sidebar-nav-index { color: #7ea994; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
+    .sidebar-nav-button[aria-selected="true"] .sidebar-nav-index, .sidebar-nav-button.is-active .sidebar-nav-index { color: #4a7863; }
+    .sidebar-nav-count { color: #91b6a5; font-size: 9px; font-weight: 760; }
+    .sidebar-nav-button[aria-selected="true"] .sidebar-nav-count, .sidebar-nav-button.is-active .sidebar-nav-count { color: #4a7863; }
+    .header-actions { align-items: stretch; flex-direction: column; width: 100%; margin-top: 13px; }
+    .quit-button {
+      width: 100%; color: #e3eee8; background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.17); border-radius: 6px;
+    }
+    .quit-button:hover { color: white; background: rgba(255,255,255,.12); }
+    main { grid-column: 2; width: min(1080px, calc(100% - 64px)); margin: 0 auto; padding: 44px 0 72px; }
+    .welcome { padding-top: 74px; }
+    #explorer h1 { max-width: none; font-size: clamp(34px, 4vw, 48px); letter-spacing: -.045em; }
+    #explorer .lede { margin-top: 9px; font-size: 15px; }
+    #explorer .eyebrow { margin-bottom: 9px; }
+    .workspace-view.topic-library, .workspace-view.results { margin-top: 0; }
+    #explorer .topic-library h1 { font-size: clamp(34px, 4vw, 44px); }
+    #explorer .results h1 { font-size: clamp(30px, 3.2vw, 40px); }
+    .workspace-back {
+      margin: 0 0 23px; padding: 0; color: var(--accent-dark); background: transparent; border: 0;
+      font-size: 13px; font-weight: 740; cursor: pointer;
+    }
+    .workspace-back:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .search-panel {
+      margin-top: 23px; padding: 6px; background: white; border-color: #cbd9d1; border-radius: 8px; box-shadow: none; backdrop-filter: none;
+    }
+    .search-button { border-radius: 5px; }
+    .featured-search, .example { border-radius: 5px; }
+    .secondary-tools { grid-template-columns: 1fr; margin-top: 18px; }
+    .disclosure, .topic-browser, .record-list, .result-disclosure, .card, .open-card, .bundle-item, .trust-item {
+      border-radius: 7px; box-shadow: none;
+    }
+    .topic-browser { display: block; background: white; }
+    .directory-main { padding: 22px; }
+    .directory-toolbar { display: flex; justify-content: flex-end; }
+
+    @media (max-width: 980px) {
+      .shell { grid-template-columns: 200px minmax(0, 1fr); }
+      main { width: min(100% - 36px, 1080px); }
+    }
+    @media (max-width: 760px) {
+      .shell { display: block; }
+      header { position: static; height: auto; padding: 18px 16px; }
+      .brand { align-items: center; }
+      .sidebar-context { margin-top: 22px; }
+      .sidebar-bundle { margin-top: 18px; padding-left: 0; padding-right: 0; }
+      .sidebar-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sidebar-nav .sidebar-label { grid-column: 1 / -1; margin-left: 0; }
+      .sidebar-view-list { display: contents; }
+      .header-actions { margin-top: 14px; }
+      main { width: min(100% - 24px, 1080px); padding-top: 48px; }
+    }
   </style>
 </head>
 <body>
@@ -418,8 +473,37 @@ PAGE = r'''<!doctype html>
         </span>
         <span>Genome Explorer</span>
       </div>
+      <div class="sidebar-context" id="sidebar-context" hidden>
+        <nav class="sidebar-nav" aria-label="Explore this bundle">
+          <p class="sidebar-label">Browse</p>
+          <button class="sidebar-nav-button" id="sidebar-search" type="button">
+            <span class="sidebar-nav-index">01</span><span>Genome search</span>
+          </button>
+          <div class="sidebar-view-list" role="tablist" aria-label="Topic views">
+            <button class="sidebar-nav-button" type="button" role="tab" aria-controls="topic-catalog" data-sidebar-view="personal">
+              <span class="sidebar-nav-index">02</span><span>Personal results</span><span class="sidebar-nav-count"></span>
+            </button>
+            <button class="sidebar-nav-button" type="button" role="tab" aria-controls="topic-catalog" data-sidebar-view="medications">
+              <span class="sidebar-nav-index">03</span><span>Medications</span><span class="sidebar-nav-count"></span>
+            </button>
+            <button class="sidebar-nav-button" type="button" role="tab" aria-controls="topic-catalog" data-sidebar-view="conditions">
+              <span class="sidebar-nav-index">04</span><span>Conditions</span><span class="sidebar-nav-count"></span>
+            </button>
+            <button class="sidebar-nav-button" type="button" role="tab" aria-controls="topic-catalog" data-sidebar-view="traits">
+              <span class="sidebar-nav-index">05</span><span>Traits</span><span class="sidebar-nav-count"></span>
+            </button>
+          </div>
+        </nav>
+        <div class="sidebar-bundle">
+          <p class="sidebar-label">Bundle details</p>
+          <strong class="sidebar-bundle-name" id="sidebar-bundle-name">Genome bundle</strong>
+          <span class="sidebar-bundle-status" id="validation">Verified</span>
+          <span class="sidebar-bundle-meta">Genome spec <span id="spec-version">Loading</span> · <span id="build">Loading</span></span>
+          <span class="sidebar-bundle-meta"><span id="snapshot">Loading</span> · <span id="stored">Loading</span> local data</span>
+        </div>
+      </div>
       <div class="header-actions">
-        <button class="quit-button" id="bundles-button" type="button" hidden>Bundles</button>
+        <button class="quit-button" id="bundles-button" type="button" hidden>Manage bundles</button>
         <button class="quit-button" id="quit-button" type="button">Quit</button>
       </div>
     </header>
@@ -461,63 +545,56 @@ PAGE = r'''<!doctype html>
     </main>
 
     <main id="explorer" hidden>
-      <p class="eyebrow">Exploring <span id="active-bundle-name">your genome bundle</span></p>
-      <h1>What would you like to explore?</h1>
-      <p class="lede">Search this bundle by topic, medication, gene, or variant.</p>
+      <section class="workspace-view explorer-intro" id="view-search">
+        <p class="eyebrow">Exploring <span id="active-bundle-name">your genome bundle</span></p>
+        <h1>What would you like to explore?</h1>
+        <p class="lede">Search this bundle by topic, medication, gene, or variant.</p>
 
-      <div class="search-panel">
-        <form id="search-form">
-          <input id="search-input" type="search" aria-label="Search your genome bundle" autocomplete="off" spellcheck="false" placeholder="Try a medication, trait, condition, or gene" autofocus>
-          <button class="search-button" id="search-button" type="submit">Search</button>
-        </form>
-      </div>
-      <div class="featured-searches" aria-label="Popular searches">
-        <span>Popular searches</span>
-        <button class="featured-search" type="button" data-query="MTHFR">MTHFR</button>
-        <button class="featured-search" type="button" data-query="Ehlers-Danlos">Ehlers-Danlos syndrome</button>
-        <button class="featured-search" type="button" data-query="Parkinson">Parkinson's disease</button>
-        <button class="featured-search" type="button" data-query="primary immunodeficiency">Primary immunodeficiency</button>
-        <button class="featured-search" type="button" data-query="clopidogrel">Clopidogrel</button>
-        <button class="featured-search" type="button" data-query="cholesterol">Cholesterol</button>
-      </div>
-      <div class="secondary-tools">
-        <details class="disclosure">
-          <summary>Looking for a specific gene or variant?</summary>
-          <div class="disclosure-body">
-            <p>You can search a gene name, rsID, or genomic position when you know the exact identifier.</p>
-            <div class="examples technical-examples">
-              <button class="example" type="button" data-query="CYP2C19">CYP2C19</button>
-              <button class="example" type="button" data-query="rs11188082">rs11188082</button>
-              <button class="example" type="button" data-query="chr10:94808278">chr10:94808278</button>
+        <div class="search-panel">
+          <form id="search-form">
+            <input id="search-input" type="search" aria-label="Search your genome bundle" autocomplete="off" spellcheck="false" placeholder="Try a medication, trait, condition, or gene" autofocus>
+            <button class="search-button" id="search-button" type="submit">Search</button>
+          </form>
+        </div>
+        <div class="featured-searches" aria-label="Popular searches">
+          <span>Popular searches</span>
+          <button class="featured-search" type="button" data-query="MTHFR">MTHFR</button>
+          <button class="featured-search" type="button" data-query="Ehlers-Danlos">Ehlers-Danlos syndrome</button>
+          <button class="featured-search" type="button" data-query="Parkinson">Parkinson's disease</button>
+          <button class="featured-search" type="button" data-query="primary immunodeficiency">Primary immunodeficiency</button>
+          <button class="featured-search" type="button" data-query="clopidogrel">Clopidogrel</button>
+          <button class="featured-search" type="button" data-query="cholesterol">Cholesterol</button>
+        </div>
+        <div class="secondary-tools">
+          <details class="disclosure">
+            <summary>Looking for a specific gene or variant?</summary>
+            <div class="disclosure-body">
+              <p>You can search a gene name, rsID, or genomic position when you know the exact identifier.</p>
+              <div class="examples technical-examples">
+                <button class="example" type="button" data-query="CYP2C19">CYP2C19</button>
+                <button class="example" type="button" data-query="rs11188082">rs11188082</button>
+                <button class="example" type="button" data-query="chr10:94808278">chr10:94808278</button>
+              </div>
             </div>
-          </div>
-        </details>
-
-        <details class="disclosure" id="bundle-details">
-          <summary><span>Bundle details</span><span class="bundle-summary" id="bundle-summary">Verified and ready</span></summary>
-          <div class="disclosure-body">
-            <dl class="bundle-facts">
-              <div class="bundle-fact"><dt>Nickname</dt><dd id="bundle-nickname">Loading</dd></div>
-              <div class="bundle-fact"><dt>Status</dt><dd id="validation">Verified</dd></div>
-              <div class="bundle-fact"><dt>Genome spec</dt><dd id="spec-version">Loading</dd></div>
-              <div class="bundle-fact"><dt>Genome reference</dt><dd id="build">Loading</dd></div>
-              <div class="bundle-fact"><dt>Bundle date</dt><dd id="snapshot">Loading</dd></div>
-              <div class="bundle-fact"><dt>Local data</dt><dd id="stored">Loading</dd></div>
-            </dl>
-          </div>
-        </details>
-      </div>
-      <section class="topic-library" aria-labelledby="topic-library-title">
+          </details>
+        </div>
+      </section>
+      <section class="workspace-view topic-library" id="view-library" aria-labelledby="topic-library-title" hidden>
         <div class="topic-library-head">
-          <h2 id="topic-library-title">Browse common topics</h2>
+          <div>
+            <p class="eyebrow">Bundle library</p>
+            <h1 id="topic-library-title">Personal results</h1>
+            <p class="lede" id="topic-library-lede">Browse person-specific results recorded in this bundle.</p>
+          </div>
           <div class="topic-summary" id="topic-summary"></div>
         </div>
-        <div class="topic-catalog" id="topic-catalog"></div>
+        <div class="topic-catalog" id="topic-catalog" role="tabpanel"></div>
       </section>
 
-      <section class="results" id="results" hidden aria-live="polite">
+      <section class="workspace-view results" id="results" hidden aria-live="polite">
+        <button class="workspace-back" id="results-back" type="button">← Back</button>
         <div class="results-head">
-          <h2 id="results-title">What the bundle records</h2>
+          <h1 id="results-title">What the bundle records</h1>
           <div class="result-meta" id="result-meta"></div>
         </div>
         <div class="notice">
@@ -548,6 +625,15 @@ PAGE = r'''<!doctype html>
     const content = document.querySelector("#result-content");
     const topicCatalog = document.querySelector("#topic-catalog");
     const topicSummary = document.querySelector("#topic-summary");
+    const topicLibrary = document.querySelector(".topic-library");
+    const topicLibraryTitle = document.querySelector("#topic-library-title");
+    const topicLibraryLede = document.querySelector("#topic-library-lede");
+    const viewSearch = document.querySelector("#view-search");
+    const resultsBack = document.querySelector("#results-back");
+    const sidebarContext = document.querySelector("#sidebar-context");
+    const sidebarBundleName = document.querySelector("#sidebar-bundle-name");
+    const sidebarSearch = document.querySelector("#sidebar-search");
+    const sidebarViewButtons = Array.from(document.querySelectorAll("[data-sidebar-view]"));
     const bundlesButton = document.querySelector("#bundles-button");
     const quitButton = document.querySelector("#quit-button");
     const desktop = window.genomeExplorer?.desktop === true;
@@ -556,6 +642,9 @@ PAGE = r'''<!doctype html>
     let explorerReady = false;
     let latestStatus = null;
     let latestTopics = [];
+    let activeDirectoryView = "personal";
+    let activeWorkspaceRoute = "search";
+    let resultReturnRoute = "search";
 
     const fieldLabels = {
       variant_id: "Variant identifier", rsid: "rsID", chrom: "Chromosome", pos: "Position",
@@ -632,20 +721,24 @@ PAGE = r'''<!doctype html>
 
     const directoryViews = {
       personal: {
-        label: "Results in this bundle",
-        title: "Person-specific results"
+        label: "Personal results",
+        title: "Personal results",
+        description: "Browse person-specific results recorded in this bundle."
       },
       medications: {
         label: "Medications",
-        title: "Medications"
+        title: "Medications",
+        description: "Browse medications linked to pharmacogenomic records in this bundle."
       },
       conditions: {
         label: "Conditions",
-        title: "Conditions"
+        title: "Conditions",
+        description: "Browse conditions covered by recorded scores and person-linked annotations."
       },
       traits: {
         label: "Traits",
-        title: "Traits"
+        title: "Traits",
+        description: "Browse traits covered by recorded scores and person-linked annotations."
       }
     };
 
@@ -765,80 +858,98 @@ PAGE = r'''<!doctype html>
       const wrapper = document.createElement("div");
       wrapper.className = "topic-browser";
       let filterValue = "";
-      let viewValue = topics.some(isPersonSpecificTopic) ? "personal" : "medications";
-
-      const nav = document.createElement("aside");
-      nav.className = "directory-nav";
-      const navLabel = document.createElement("p");
-      navLabel.className = "directory-nav-label";
-      navLabel.textContent = "Browse by";
-      const navList = document.createElement("div");
-      navList.className = "directory-nav-list";
-      navList.setAttribute("role", "tablist");
 
       const main = document.createElement("div");
       main.className = "directory-main";
       const toolbar = document.createElement("div");
       toolbar.className = "directory-toolbar";
-      const toolbarCopy = document.createElement("div");
-      const title = document.createElement("h3");
-      title.className = "directory-title";
-      toolbarCopy.append(title);
       const filter = document.createElement("input");
       filter.className = "directory-filter";
       filter.type = "search";
       filter.setAttribute("aria-label", "Filter common topics");
       const listHost = document.createElement("div");
 
-      const viewCount = key => topics.filter(topic => key === "personal" ? isPersonSpecificTopic(topic) : topic.kind === key).length;
       const refresh = () => {
-        const view = directoryViews[viewValue];
-        title.textContent = view.title;
-        filter.placeholder = viewValue === "personal" ? "Filter results" : `Filter ${view.label.toLowerCase()}`;
-        navList.querySelectorAll(".directory-nav-button").forEach(control => {
-          control.setAttribute("aria-selected", String(control.dataset.directoryView === viewValue));
-        });
-        listHost.replaceChildren(directoryGroups(topics, viewValue, filterValue));
+        const view = directoryViews[activeDirectoryView];
+        filter.placeholder = activeDirectoryView === "personal" ? "Filter results" : `Filter ${view.label.toLowerCase()}`;
+        listHost.replaceChildren(directoryGroups(topics, activeDirectoryView, filterValue));
       };
-
-      Object.entries(directoryViews).forEach(([key, view]) => {
-        const control = document.createElement("button");
-        control.className = "directory-nav-button";
-        control.type = "button";
-        control.dataset.directoryView = key;
-        control.setAttribute("role", "tab");
-        const label = document.createElement("span");
-        label.textContent = view.label;
-        const count = document.createElement("span");
-        count.className = "directory-nav-count";
-        count.textContent = viewCount(key);
-        control.append(label, count);
-        control.addEventListener("click", () => {
-          viewValue = key;
-          filterValue = "";
-          filter.value = "";
-          refresh();
-        });
-        navList.append(control);
-      });
 
       filter.addEventListener("input", () => {
         filterValue = filter.value;
         refresh();
       });
-      nav.append(navLabel, navList);
-      toolbar.append(toolbarCopy, filter);
+      toolbar.append(filter);
       main.append(toolbar, listHost);
-      wrapper.append(nav, main);
+      wrapper.append(main);
       refresh();
       return wrapper;
     }
 
     function renderTopicCatalog(topics) {
       latestTopics = Array.isArray(topics) ? topics : [];
-      topicSummary.textContent = `${latestTopics.length} searchable topics`;
+      sidebarViewButtons.forEach(control => {
+        const view = control.dataset.sidebarView;
+        const count = latestTopics.filter(topic => view === "personal" ? isPersonSpecificTopic(topic) : topic.kind === view).length;
+        control.querySelector(".sidebar-nav-count").textContent = count;
+      });
+      const currentView = directoryViews[activeDirectoryView];
+      const visibleCount = latestTopics.filter(topic => activeDirectoryView === "personal" ? isPersonSpecificTopic(topic) : topic.kind === activeDirectoryView).length;
+      topicLibraryTitle.textContent = currentView.title;
+      topicLibraryLede.textContent = currentView.description;
+      topicSummary.textContent = `${visibleCount} ${visibleCount === 1 ? "topic" : "topics"}`;
       topicCatalog.replaceChildren(renderDirectory(latestTopics));
     }
+
+    function updateSidebarRoute(route) {
+      const searchActive = route === "search" || (route === "results" && resultReturnRoute === "search");
+      sidebarSearch.classList.toggle("is-active", searchActive);
+      if (searchActive) sidebarSearch.setAttribute("aria-current", "page");
+      else sidebarSearch.removeAttribute("aria-current");
+      sidebarViewButtons.forEach(control => {
+        const selected = route === control.dataset.sidebarView ||
+          (route === "results" && resultReturnRoute === control.dataset.sidebarView);
+        control.setAttribute("aria-selected", String(selected));
+      });
+    }
+
+    function showWorkspaceRoute(route, { historyMode = "push", focusSearch = false } = {}) {
+      const isDirectoryRoute = Object.hasOwn(directoryViews, route);
+      const resolvedRoute = route === "results" || route === "search" || isDirectoryRoute ? route : "search";
+      if (Object.hasOwn(directoryViews, resolvedRoute) && activeDirectoryView !== resolvedRoute) {
+        activeDirectoryView = resolvedRoute;
+        renderTopicCatalog(latestTopics);
+      }
+      viewSearch.hidden = resolvedRoute !== "search";
+      topicLibrary.hidden = !Object.hasOwn(directoryViews, resolvedRoute);
+      results.hidden = resolvedRoute !== "results";
+      activeWorkspaceRoute = resolvedRoute;
+      updateSidebarRoute(resolvedRoute);
+
+      const targetHash = `#${resolvedRoute}`;
+      if (historyMode === "replace") window.history.replaceState({ route: resolvedRoute }, "", targetHash);
+      else if (historyMode === "push" && window.location.hash !== targetHash) {
+        window.history.pushState({ route: resolvedRoute }, "", targetHash);
+      }
+      window.scrollTo({ top: 0, behavior: "auto" });
+      if (focusSearch) window.setTimeout(() => input.focus(), 0);
+    }
+
+    sidebarSearch.addEventListener("click", () => showWorkspaceRoute("search", { focusSearch: true }));
+
+    sidebarViewButtons.forEach(control => {
+      control.addEventListener("click", () => showWorkspaceRoute(control.dataset.sidebarView));
+    });
+
+    resultsBack.addEventListener("click", () => {
+      if (window.location.hash === "#results" && window.history.state?.route === "results") window.history.back();
+      else showWorkspaceRoute(resultReturnRoute);
+    });
+
+    window.addEventListener("popstate", () => {
+      if (!explorerReady) return;
+      showWorkspaceRoute(window.location.hash.slice(1), { historyMode: "none" });
+    });
 
     function formatBytes(bytes) {
       const units = ["B", "KiB", "MiB", "GiB"];
@@ -997,13 +1108,12 @@ PAGE = r'''<!doctype html>
       const cached = status.validation_mode === "cached";
       const nickname = status.active_nickname || "Genome bundle";
       document.querySelector("#active-bundle-name").textContent = nickname;
-      document.querySelector("#bundle-nickname").textContent = nickname;
+      sidebarBundleName.textContent = nickname;
       document.querySelector("#validation").textContent = cached ? "Previously verified" : "Verified";
       document.querySelector("#spec-version").textContent = `v${status.schema_version}`;
       document.querySelector("#build").textContent = status.genome_build;
-      document.querySelector("#snapshot").textContent = new Date(status.generated_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+      document.querySelector("#snapshot").textContent = formatBundleDate(status.generated_at);
       document.querySelector("#stored").textContent = formatBytes(status.stored_bytes);
-      document.querySelector("#bundle-summary").textContent = cached ? "Previously verified and ready" : "Verified and ready";
     }
 
     function renderAppStatus(status) {
@@ -1011,23 +1121,26 @@ PAGE = r'''<!doctype html>
       if (status.status === "ready") {
         welcome.hidden = true;
         explorer.hidden = false;
+        sidebarContext.hidden = false;
         bundlesButton.hidden = !(status.bundles || []).length;
         bundlesButton.disabled = false;
         chooseButton.disabled = false;
         populateBundleStatus(status);
+        if (!explorerReady) activeDirectoryView = "personal";
         renderTopicCatalog(status.topics);
         if (!explorerReady) {
           explorerReady = true;
           input.value = "";
-          results.hidden = true;
           content.replaceChildren();
-          input.focus();
+          resultReturnRoute = "search";
+          showWorkspaceRoute("search", { historyMode: "replace", focusSearch: true });
         }
         return;
       }
 
       welcome.hidden = false;
       explorer.hidden = true;
+      sidebarContext.hidden = true;
       bundlesButton.hidden = true;
       bundlesButton.disabled = false;
       explorerReady = false;
@@ -1581,7 +1694,6 @@ PAGE = r'''<!doctype html>
     }
 
     function renderSearch(payload) {
-      results.hidden = false;
       const count = payload.hits.length;
       const matchingTopic = latestTopics.find(topic => topic.query.toLowerCase() === payload.query.toLowerCase());
       const grouped = Object.groupBy(payload.hits, hit => hit.section);
@@ -1600,7 +1712,6 @@ PAGE = r'''<!doctype html>
           ? "No score or related variant is recorded for this topic."
           : "This search is not covered by the bundle's recorded fields.";
         content.append(empty);
-        results.scrollIntoView({ behavior: "smooth", block: "start" });
         return;
       }
       const sectionOrder = ["clinical_findings", "pharmacogenomics", "polygenic_scores", "trait_variants", "genes", "variants", "gwas"];
@@ -1628,17 +1739,16 @@ PAGE = r'''<!doctype html>
         }
         content.append(section);
       });
-      results.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     async function search(query) {
+      if (activeWorkspaceRoute !== "results") resultReturnRoute = activeWorkspaceRoute;
+      showWorkspaceRoute("results");
       button.disabled = true;
       button.innerHTML = '<span class="spinner"></span>Searching';
-      results.hidden = false;
       document.querySelector("#results-title").textContent = "Searching";
       document.querySelector("#result-meta").textContent = "";
       content.innerHTML = '<div class="empty">Searching this bundle...</div>';
-      results.scrollIntoView({ behavior: "smooth", block: "start" });
       try {
         const response = await fetch(`${basePath}/api/search`, {
           method: "POST",
@@ -1649,7 +1759,6 @@ PAGE = r'''<!doctype html>
         if (!response.ok) throw new Error(payload.error || "Search failed");
         renderSearch(payload);
       } catch (error) {
-        results.hidden = false;
         document.querySelector("#results-title").textContent = "Search unavailable";
         document.querySelector("#result-meta").textContent = "";
         content.innerHTML = '<div class="empty error"></div>';
