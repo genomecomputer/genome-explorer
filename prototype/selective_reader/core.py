@@ -55,6 +55,7 @@ class WorkspaceReport:
 class SearchResult:
     query: str
     query_kind: str
+    answerability: Dict[str, Any]
     hits: List[Dict[str, Any]]
     elapsed_seconds: float
 
@@ -458,6 +459,258 @@ def _view_columns(connection: Any, view_name: str) -> set[str]:
     }
 
 
+def _bundle_context(workspace: Path) -> Dict[str, Any]:
+    manifest: Dict[str, Any] = {}
+    manifest_path = workspace / "manifest.json"
+    if manifest_path.is_file():
+        try:
+            candidate = json.loads(manifest_path.read_text())
+            if isinstance(candidate, dict):
+                manifest = candidate
+        except (OSError, ValueError, json.JSONDecodeError):
+            manifest = {}
+
+    schema_version = manifest.get("schema_version")
+    schema_match = (
+        SCHEMA_VERSION_PATTERN.fullmatch(schema_version)
+        if isinstance(schema_version, str)
+        else None
+    )
+    schema_minor = (
+        (int(schema_match.group(1)), int(schema_match.group(2)))
+        if schema_match is not None
+        else None
+    )
+
+    omissions_recorded = False
+    omissions_path = workspace / "omissions.json"
+    if omissions_path.is_file():
+        try:
+            payload = json.loads(omissions_path.read_text())
+            omissions = payload.get("omissions") if isinstance(payload, dict) else None
+            omissions_recorded = isinstance(omissions, list) and bool(omissions)
+        except (OSError, ValueError, json.JSONDecodeError):
+            omissions_recorded = False
+
+    return {
+        "schema_version": schema_version if isinstance(schema_version, str) else None,
+        "schema_minor": schema_minor,
+        "omissions_recorded": omissions_recorded,
+    }
+
+
+def _answerability(
+    state: str,
+    query_kind: str,
+    basis: str,
+    reason: str,
+    **details: Any,
+) -> Dict[str, Any]:
+    return {
+        "state": state,
+        "scope": query_kind,
+        "basis": basis,
+        "reason": reason,
+        **details,
+    }
+
+
+def _column_expression(columns: set[str], name: str, value_type: str) -> str:
+    if name in columns:
+        return name
+    return "CAST(NULL AS %s)" % value_type
+
+
+def _coordinate_callability(
+    connection: Any,
+    available: set[str],
+    chrom: str,
+    pos: int,
+) -> Optional[Dict[str, Any]]:
+    sources = (
+        (
+            "callability",
+            "callability.parquet",
+            "pos = ?",
+        ),
+        (
+            "callable_regions",
+            "callable_regions.parquet",
+            "start_pos <= ? AND end_pos >= ?",
+        ),
+    )
+    for view_name, source_name, position_predicate in sources:
+        if view_name not in available:
+            continue
+        columns = _view_columns(connection, view_name)
+        required = {"chrom", "callable"}
+        if view_name == "callability":
+            required.add("pos")
+        else:
+            required.update({"start_pos", "end_pos"})
+        if not required.issubset(columns):
+            continue
+
+        parameters: List[Any] = [chrom]
+        parameters.extend([pos, pos] if view_name == "callable_regions" else [pos])
+        cursor = connection.execute(
+            """
+            SELECT callable,
+                   %s AS reference_observed,
+                   %s AS call_confidence,
+                   %s AS evidence_scope,
+                   %s AS assay_scope
+            FROM %s
+            WHERE lower(replace(chrom, 'chr', '')) = lower(replace(?, 'chr', ''))
+              AND %s
+            LIMIT 25
+            """
+            % (
+                _column_expression(columns, "reference_observed", "BOOLEAN"),
+                _column_expression(columns, "call_confidence", "VARCHAR"),
+                _column_expression(columns, "evidence_scope", "VARCHAR"),
+                _column_expression(columns, "assay_scope", "VARCHAR"),
+                view_name,
+                position_predicate,
+            ),
+            parameters,
+        )
+        rows = _rows(cursor, "callability")
+        if not rows:
+            continue
+
+        callable_values = {
+            row["callable"] for row in rows if row.get("callable") is not None
+        }
+        evidence = {
+            "source": source_name,
+            "callable": next(iter(callable_values)) if len(callable_values) == 1 else None,
+            "reference_observed": any(
+                row.get("reference_observed") is True for row in rows
+            ),
+            "call_confidence": next(
+                (
+                    row.get("call_confidence")
+                    for row in rows
+                    if row.get("call_confidence") is not None
+                ),
+                None,
+            ),
+            "evidence_scope": next(
+                (
+                    row.get("evidence_scope")
+                    for row in rows
+                    if row.get("evidence_scope") is not None
+                ),
+                None,
+            ),
+            "assay_scope": next(
+                (
+                    row.get("assay_scope")
+                    for row in rows
+                    if row.get("assay_scope") is not None
+                ),
+                None,
+            ),
+        }
+        if callable_values == {True}:
+            return _answerability(
+                "callable_no_matching_alternate",
+                "coordinate",
+                source_name,
+                "callable_position_without_matching_variant",
+                callability=evidence,
+            )
+        if callable_values == {False}:
+            return _answerability(
+                "not_callable",
+                "coordinate",
+                source_name,
+                "position_not_reliably_callable",
+                callability=evidence,
+            )
+        return _answerability(
+            "insufficient_bundle_data",
+            "coordinate",
+            source_name,
+            "callability_is_unknown_or_conflicting",
+            callability=evidence,
+        )
+    return None
+
+
+def _answerability_for_search(
+    connection: Any,
+    workspace: Path,
+    available: set[str],
+    query_kind: str,
+    hits: List[Dict[str, Any]],
+    coordinate: Optional[re.Match[str]],
+) -> Dict[str, Any]:
+    if hits:
+        return _answerability(
+            "recorded",
+            query_kind,
+            "bundle_records",
+            "matching_bundle_records_found",
+            sections=sorted({str(hit["section"]) for hit in hits}),
+        )
+
+    context = _bundle_context(workspace)
+    if query_kind == "coordinate" and coordinate is not None:
+        chrom = "chr" + coordinate.group("chrom").upper()
+        callability = _coordinate_callability(
+            connection,
+            available,
+            chrom,
+            int(coordinate.group("pos")),
+        )
+        if callability is not None:
+            return callability
+
+        has_callability_source = bool(
+            {"callability", "callable_regions"}.intersection(available)
+        )
+        if has_callability_source:
+            return _answerability(
+                "insufficient_bundle_data",
+                query_kind,
+                "callability",
+                "no_site_level_callability_record",
+                omissions_recorded=context["omissions_recorded"],
+            )
+
+        schema_minor = context["schema_minor"]
+        if schema_minor is not None and schema_minor < (1, 1):
+            return _answerability(
+                "unsupported_bundle_version",
+                query_kind,
+                "schema_version",
+                "site_callability_not_available_in_bundle_version",
+                schema_version=context["schema_version"],
+            )
+        return _answerability(
+            "analysis_not_included",
+            query_kind,
+            "manifest",
+            "site_callability_not_included",
+            schema_version=context["schema_version"],
+        )
+
+    reason = (
+        "rsid_has_no_offline_coordinate_mapping"
+        if query_kind == "rsid"
+        else "no_matching_record_without_complete_coverage_evidence"
+    )
+    return _answerability(
+        "insufficient_bundle_data",
+        query_kind,
+        "bundle_records",
+        reason,
+        omissions_recorded=context["omissions_recorded"],
+    )
+
+
 def _gwas_column(
     columns: set[str], *candidates: str, fallback: str = "CAST(NULL AS VARCHAR)"
 ) -> str:
@@ -605,6 +858,8 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
         "prs": workspace / "prs.parquet",
         "gwas_associations": workspace / "gwas_associations.parquet",
         "gene_index": workspace / "gene_index.parquet",
+        "callability": workspace / "callability.parquet",
+        "callable_regions": workspace / "callable_regions.parquet",
     }
     available = set()
     for table, path in table_files.items():
@@ -872,10 +1127,19 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
             )
             hits.extend(_rows(cursor, "gwas"))
 
+    answerability = _answerability_for_search(
+        connection,
+        workspace,
+        available,
+        query_kind,
+        hits,
+        coordinate,
+    )
     connection.close()
     return SearchResult(
         query=normalized_query,
         query_kind=query_kind,
+        answerability=answerability,
         hits=hits,
         elapsed_seconds=round(time.monotonic() - started, 3),
     )

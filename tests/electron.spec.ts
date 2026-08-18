@@ -105,7 +105,11 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await expect(lactoseTopic.locator(".topic-indicator")).toHaveClass(/no-data/);
     await expect(lactoseTopic.locator(".topic-indicator-value")).toHaveText("No personal result");
     await lactoseTopic.click();
-    await expect(firstWindow.locator("#results-title")).toHaveText("No personal result recorded");
+    await expect(firstWindow.locator("#results-title")).toHaveText("Not enough bundle data");
+    await expect(firstWindow.locator("#results")).toHaveAttribute(
+      "data-answerability-state",
+      "insufficient_bundle_data",
+    );
     await expect(firstWindow.locator(".section-gwas")).toHaveCount(0);
     await firstWindow.getByRole("button", { name: "← Back" }).click();
     await expect(firstWindow.locator("#view-library")).toBeVisible();
@@ -175,7 +179,9 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
     await firstWindow.getByRole("button", { name: /Genome search/ }).click();
     await firstWindow.getByRole("searchbox", { name: "Search your genome bundle" }).fill("CYP2C19");
     await firstWindow.getByRole("button", { name: "Search", exact: true }).click();
-    await expect(firstWindow.locator("#results-title")).toHaveText("What the bundle records");
+    await expect(firstWindow.locator("#results-title")).toHaveText("Personal records found");
+    await expect(firstWindow.locator("#results")).toHaveAttribute("data-answerability-state", "recorded");
+    await expect(firstWindow.locator("#result-meta")).toContainText("Search: CYP2C19");
     await expect(firstWindow.getByText("Person-specific data from this bundle").first()).toBeVisible();
     if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
       await firstWindow.screenshot({
@@ -183,6 +189,69 @@ test("opens, searches, reuses a bundle, and owns engine shutdown", async () => {
         fullPage: true,
       });
     }
+
+    const answerabilityFixtures: Record<string, { state: string; reason: string }> = {
+      "chr1:200:A:T": {
+        state: "callable_no_matching_alternate",
+        reason: "callable_position_without_matching_variant",
+      },
+      "chr1:300": {
+        state: "not_callable",
+        reason: "position_not_reliably_callable",
+      },
+      "chr1:400": {
+        state: "analysis_not_included",
+        reason: "site_callability_not_included",
+      },
+      "chr1:500": {
+        state: "unsupported_bundle_version",
+        reason: "site_callability_not_available_in_bundle_version",
+      },
+      rs999: {
+        state: "insufficient_bundle_data",
+        reason: "rsid_has_no_offline_coordinate_mapping",
+      },
+    };
+    await firstWindow.route("**/api/search", async (route) => {
+      const request = route.request();
+      const payload = request.postDataJSON() as { query: string };
+      const answerability = answerabilityFixtures[payload.query];
+      if (!answerability) {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          query: payload.query,
+          query_kind: payload.query.startsWith("rs") ? "rsid" : "coordinate",
+          answerability: {
+            ...answerability,
+            scope: payload.query.startsWith("rs") ? "rsid" : "coordinate",
+            basis: "test_fixture",
+          },
+          hits: [],
+          elapsed_seconds: 0,
+        }),
+      });
+    });
+
+    const answerabilityCases = [
+      ["chr1:200:A:T", "callable_no_matching_alternate", "No matching alternate record"],
+      ["chr1:300", "not_callable", "Position not reliably callable"],
+      ["chr1:400", "analysis_not_included", "Callability not included"],
+      ["chr1:500", "unsupported_bundle_version", "Bundle version cannot answer"],
+      ["rs999", "insufficient_bundle_data", "Not enough bundle data"],
+    ];
+    for (const [query, state, title] of answerabilityCases) {
+      await firstWindow.getByRole("button", { name: /Genome search/ }).click();
+      await firstWindow.getByRole("searchbox", { name: "Search your genome bundle" }).fill(query);
+      await firstWindow.getByRole("button", { name: "Search", exact: true }).click();
+      await expect(firstWindow.locator("#results")).toHaveAttribute("data-answerability-state", state);
+      await expect(firstWindow.locator("#results-title")).toHaveText(title);
+    }
+    await firstWindow.unroute("**/api/search");
 
     const firstEnginePid = Number.parseInt(readFileSync(pidFile, "utf8"), 10);
     await firstApp.close();
@@ -304,7 +373,8 @@ test("opens and searches a current v1.1 bundle", async () => {
     const searchResponse = window.waitForResponse((response) => response.url().endsWith("/api/search"));
     await window.getByRole("button", { name: "Search", exact: true }).click();
     expect((await searchResponse).ok()).toBe(true);
-    await expect(window.locator("#results-title")).toHaveText("What the bundle records");
+    await expect(window.locator("#results-title")).toHaveText("Personal records found");
+    await expect(window.locator("#results")).toHaveAttribute("data-answerability-state", "recorded");
     await expect(window.locator(".section-variants .record-row").filter({ hasText: "rs1800562" })).toBeVisible();
     await expect(window.locator(".section-clinical_findings")).toHaveCount(0);
 
@@ -321,6 +391,21 @@ test("opens and searches a current v1.1 bundle", async () => {
       "href",
       /pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/,
     );
+
+    await window.getByRole("button", { name: /Genome search/ }).click();
+    await window.getByRole("searchbox", { name: "Search your genome bundle" }).fill("chr6:1");
+    const unresolvedResponse = window.waitForResponse((response) => response.url().endsWith("/api/search"));
+    await window.getByRole("button", { name: "Search", exact: true }).click();
+    const unresolvedPayload = await (await unresolvedResponse).json();
+    expect(unresolvedPayload.answerability.state).toBe("insufficient_bundle_data");
+    await expect(window.locator("#results-title")).toHaveText("Not enough bundle data");
+    await expect(window.locator("#result-meta")).toHaveText("Search: chr6:1");
+    await expect(window.locator("#result-notice-text")).toContainText("so it remains unresolved");
+    if (process.env.GENOME_EXPLORER_SCREENSHOT_DIR) {
+      await window.screenshot({
+        path: path.join(process.env.GENOME_EXPLORER_SCREENSHOT_DIR, "answerability-unresolved.png"),
+      });
+    }
 
     const enginePid = Number.parseInt(readFileSync(pidFile, "utf8"), 10);
     await app.close();

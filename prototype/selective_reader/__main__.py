@@ -28,6 +28,7 @@ class PrototypeState:
     last_kind: str = ""
     last_elapsed: float = 0.0
     hits: Optional[List[dict]] = None
+    answerability: Optional[dict] = None
     error: str = ""
 
 
@@ -66,6 +67,13 @@ def _render(state: PrototypeState) -> None:
         print()
         print(BOLD + "last query: " + RESET + state.last_query)
         print(BOLD + "query kind: " + RESET + state.last_kind)
+        if state.answerability:
+            print(
+                BOLD
+                + "answerability: "
+                + RESET
+                + str(state.answerability.get("state", "unknown"))
+            )
         print(BOLD + "query time: " + RESET + "%.3f s" % state.last_elapsed)
         print(BOLD + "matches: " + RESET + str(len(state.hits or [])))
         for hit in (state.hits or [])[:5]:
@@ -155,6 +163,7 @@ def run_tui(archive: str, force_validate: bool) -> None:
                 state.last_kind = result.query_kind
                 state.last_elapsed = result.elapsed_seconds
                 state.hits = result.hits
+                state.answerability = result.answerability
                 state.error = ""
             except Exception as error:
                 state.error = str(error)

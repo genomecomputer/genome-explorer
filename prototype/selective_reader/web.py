@@ -227,6 +227,12 @@ PAGE = r'''<!doctype html>
       display: flex; gap: 10px; align-items: flex-start; margin-bottom: 20px; padding: 13px 15px;
       color: #43544c; background: var(--blue-soft); border: 1px solid #d6e5ef; border-radius: 12px; font-size: 13px; line-height: 1.5;
     }
+    .notice[data-state="not_callable"],
+    .notice[data-state="analysis_not_included"],
+    .notice[data-state="unsupported_bundle_version"],
+    .notice[data-state="insufficient_bundle_data"] {
+      color: #574f3f; background: #f8f4e9; border-color: #e5dcc5;
+    }
     .notice svg { flex: 0 0 auto; margin-top: 1px; }
     .section { margin-top: 30px; }
     .section-title { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; color: #35453e; font-size: 13px; font-weight: 790; letter-spacing: .06em; text-transform: uppercase; }
@@ -597,9 +603,9 @@ PAGE = r'''<!doctype html>
           <h1 id="results-title">What the bundle records</h1>
           <div class="result-meta" id="result-meta"></div>
         </div>
-        <div class="notice">
+        <div class="notice" id="result-notice" data-state="recorded">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-          <span>Bundle records only. Not a diagnosis.</span>
+          <span id="result-notice-text">These results are recorded in this bundle. Not a diagnosis.</span>
         </div>
         <div id="result-content"></div>
       </section>
@@ -625,6 +631,8 @@ PAGE = r'''<!doctype html>
     const content = document.querySelector("#result-content");
     const topicCatalog = document.querySelector("#topic-catalog");
     const topicSummary = document.querySelector("#topic-summary");
+    const resultNotice = document.querySelector("#result-notice");
+    const resultNoticeText = document.querySelector("#result-notice-text");
     const topicLibrary = document.querySelector(".topic-library");
     const topicLibraryTitle = document.querySelector("#topic-library-title");
     const topicLibraryLede = document.querySelector("#topic-library-lede");
@@ -1693,27 +1701,74 @@ PAGE = r'''<!doctype html>
       return wrapper;
     }
 
+    function answerabilityPresentation(answerability) {
+      const state = answerability?.state || "insufficient_bundle_data";
+      if (state === "recorded") {
+        return {
+          title: "Personal records found",
+          notice: "These results are recorded in this bundle. Not a diagnosis."
+        };
+      }
+      if (state === "callable_no_matching_alternate") {
+        return {
+          title: "No matching alternate record",
+          notice: "This position is recorded as callable, but no matching alternate variant was found. This is not a negative health test."
+        };
+      }
+      if (state === "not_callable") {
+        return {
+          title: "Position not reliably callable",
+          notice: "The bundle cannot determine whether a matching variant is present at this position."
+        };
+      }
+      if (state === "analysis_not_included") {
+        return {
+          title: "Callability not included",
+          notice: "This bundle does not include the site-level callability needed to explain a missing variant."
+        };
+      }
+      if (state === "unsupported_bundle_version") {
+        return {
+          title: "Bundle version cannot answer",
+          notice: "This bundle version does not provide the site-level callability needed to explain a missing variant."
+        };
+      }
+      if (answerability?.reason === "rsid_has_no_offline_coordinate_mapping") {
+        return {
+          title: "Not enough bundle data",
+          notice: "No matching rsID record was found, and this bundle does not provide the offline coordinate mapping needed to check callability."
+        };
+      }
+      if (answerability?.reason === "no_site_level_callability_record") {
+        return {
+          title: "Not enough bundle data",
+          notice: "No matching variant was found, and this bundle has no callability record for the position, so it remains unresolved."
+        };
+      }
+      return {
+        title: "Not enough bundle data",
+        notice: "No matching personal record was found, and the bundle does not provide enough evidence to interpret that absence."
+      };
+    }
+
     function renderSearch(payload) {
       const count = payload.hits.length;
-      const matchingTopic = latestTopics.find(topic => topic.query.toLowerCase() === payload.query.toLowerCase());
       const grouped = Object.groupBy(payload.hits, hit => hit.section);
       const hasPersonLinkedRecords = Boolean(grouped.clinical_findings?.length || grouped.trait_variants?.length);
-      document.querySelector("#results-title").textContent = count
-        ? "What the bundle records"
-        : matchingTopic ? "No personal result recorded" : "Not covered";
+      const presentation = answerabilityPresentation(payload.answerability);
+      document.querySelector("#results-title").textContent = presentation.title;
+      const resultContext = `Search: ${payload.query}`;
       document.querySelector("#result-meta").textContent = hasPersonLinkedRecords
-        ? ""
-        : count ? `${count} recorded ${count === 1 ? "match" : "matches"}` : "";
+        ? resultContext
+        : count
+          ? `${resultContext} · ${count} recorded ${count === 1 ? "match" : "matches"}`
+          : resultContext;
+      results.dataset.answerabilityState = payload.answerability?.state || "insufficient_bundle_data";
+      resultNotice.hidden = false;
+      resultNotice.dataset.state = results.dataset.answerabilityState;
+      resultNoticeText.textContent = presentation.notice;
       content.replaceChildren();
-      if (!count) {
-        const empty = document.createElement("div");
-        empty.className = "empty";
-        empty.textContent = matchingTopic
-          ? "No score or related variant is recorded for this topic."
-          : "This search is not covered by the bundle's recorded fields.";
-        content.append(empty);
-        return;
-      }
+      if (!count) return;
       const sectionOrder = ["clinical_findings", "pharmacogenomics", "polygenic_scores", "trait_variants", "genes", "variants", "gwas"];
       const hasClearerRecord = Boolean(
         grouped.clinical_findings?.length ||
@@ -1748,6 +1803,7 @@ PAGE = r'''<!doctype html>
       button.innerHTML = '<span class="spinner"></span>Searching';
       document.querySelector("#results-title").textContent = "Searching";
       document.querySelector("#result-meta").textContent = "";
+      resultNotice.hidden = true;
       content.innerHTML = '<div class="empty">Searching this bundle...</div>';
       try {
         const response = await fetch(`${basePath}/api/search`, {
@@ -1761,6 +1817,7 @@ PAGE = r'''<!doctype html>
       } catch (error) {
         document.querySelector("#results-title").textContent = "Search unavailable";
         document.querySelector("#result-meta").textContent = "";
+        resultNotice.hidden = true;
         content.innerHTML = '<div class="empty error"></div>';
         content.firstElementChild.textContent = error.message;
       } finally {
