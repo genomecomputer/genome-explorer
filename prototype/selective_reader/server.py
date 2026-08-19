@@ -10,12 +10,20 @@ from typing import Any, Callable, Dict, Optional
 from urllib.parse import urlsplit
 
 from .bundle_library import BundleLibrary
-from .core import WorkspaceReport, json_ready, open_bundle, search_workspace
+from .core import (
+    WorkspaceReport,
+    json_ready,
+    open_bundle,
+    search_workspace,
+)
+from .genome_map import genome_map_for_workspace
+from .region_browser import region_browser_for_workspace
+from .saved_results import SavedResultsStore
 from .topics import topics_for_workspace
 from .web import PAGE
 
 
-MAX_REQUEST_BYTES = 4096
+MAX_REQUEST_BYTES = 256 * 1024
 MAX_QUERY_CHARACTERS = 200
 ArchiveChooser = Callable[[], Optional[str]]
 
@@ -41,7 +49,14 @@ class LocalExplorerServer(ThreadingHTTPServer):
             if workspace_root is not None
             else None
         )
+        self.saved_results = (
+            SavedResultsStore(workspace_root.parent / "saved-results.json")
+            if workspace_root is not None
+            else None
+        )
         self.state_lock = threading.Lock()
+        self.map_lock = threading.Lock()
+        self.genome_map_cache: Dict[str, Dict[str, Any]] = {}
         self.state_status = "ready" if report is not None else "waiting"
         self.state_error = ""
         self.archive_name = Path(report.archive).name if report is not None else ""
@@ -54,6 +69,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
             self.active_nickname = entry.nickname
             self.topics = topics_for_workspace(report.workspace)
         self.token = secrets.token_urlsafe(24)
+        self.desktop_token = secrets.token_urlsafe(32)
         self.nonce = secrets.token_urlsafe(18)
         self.expected_host = "127.0.0.1:%d" % self.server_port
         self.origin = "http://%s" % self.expected_host
@@ -82,6 +98,11 @@ class LocalExplorerServer(ThreadingHTTPServer):
         if error:
             payload["error"] = error
         if status == "ready" and report is not None:
+            saved_count = (
+                len(self.saved_results.entries(active_bundle_id))
+                if self.saved_results is not None and active_bundle_id
+                else 0
+            )
             payload.update(
                 {
                     "schema_version": report.schema_version,
@@ -95,6 +116,7 @@ class LocalExplorerServer(ThreadingHTTPServer):
                     "validated_at": report.validated_at,
                     "active_bundle_id": active_bundle_id,
                     "active_nickname": active_nickname,
+                    "saved_count": saved_count,
                 }
             )
         return payload
@@ -104,6 +126,42 @@ class LocalExplorerServer(ThreadingHTTPServer):
             if self.state_status != "ready":
                 return None
             return self.report
+
+    def genome_map_payload(self) -> Dict[str, Any]:
+        report = self.ready_report()
+        if report is None:
+            raise ValueError("choose and verify a bundle first")
+        with self.map_lock:
+            cached = self.genome_map_cache.get(report.workspace)
+            if cached is None:
+                cached = genome_map_for_workspace(
+                    report.workspace,
+                    report.genome_build,
+                )
+                self.genome_map_cache[report.workspace] = cached
+            return cached
+
+    def region_browser_payload(
+        self,
+        *,
+        query: Optional[str] = None,
+        chrom: Optional[str] = None,
+        start: Optional[int] = None,
+        end: Optional[int] = None,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        report = self.ready_report()
+        if report is None:
+            raise ValueError("choose and verify a bundle first")
+        return region_browser_for_workspace(
+            report.workspace,
+            report.genome_build,
+            query=query,
+            chrom=chrom,
+            start=start,
+            end=end,
+            page=page,
+        )
 
     def begin_selection(self) -> bool:
         with self.state_lock:
@@ -117,6 +175,27 @@ class LocalExplorerServer(ThreadingHTTPServer):
             self.active_nickname = ""
             self.topics = []
         threading.Thread(target=self._select_and_open, daemon=True).start()
+        return True
+
+    def begin_open_path(self, archive: str) -> bool:
+        path = Path(archive).expanduser()
+        if not archive.lower().endswith(".genome.tar.gz") or not path.is_file():
+            raise ValueError("choose a file ending in .genome.tar.gz")
+        with self.state_lock:
+            if self.state_status in {"choosing", "validating"}:
+                return False
+            self.state_status = "validating"
+            self.state_error = ""
+            self.archive_name = path.name
+            self.report = None
+            self.active_bundle_id = ""
+            self.active_nickname = ""
+            self.topics = []
+        threading.Thread(
+            target=self._open_path,
+            args=(str(path),),
+            daemon=True,
+        ).start()
         return True
 
     def show_library(self) -> bool:
@@ -163,6 +242,54 @@ class LocalExplorerServer(ThreadingHTTPServer):
             if self.active_bundle_id == bundle_id:
                 self.active_nickname = entry.nickname
 
+    def _selected_bundle_id(self) -> str:
+        with self.state_lock:
+            if self.state_status != "ready" or not self.active_bundle_id:
+                raise ValueError("choose and verify a bundle first")
+            return self.active_bundle_id
+
+    def saved_payload(self) -> Dict[str, Any]:
+        if self.saved_results is None:
+            raise ValueError("saved results are unavailable")
+        bundle_id = self._selected_bundle_id()
+        return {
+            "bundle_id": bundle_id,
+            "records": self.saved_results.entries(bundle_id),
+        }
+
+    def save_record(self, query: str, record: Dict[str, Any]) -> Dict[str, Any]:
+        if self.saved_results is None:
+            raise ValueError("saved results are unavailable")
+        bundle_id = self._selected_bundle_id()
+        self.saved_results.add(bundle_id, query, record)
+        return self.saved_payload()
+
+    def remove_saved_record(self, saved_id: str) -> Dict[str, Any]:
+        if self.saved_results is None:
+            raise ValueError("saved results are unavailable")
+        bundle_id = self._selected_bundle_id()
+        self.saved_results.remove(bundle_id, saved_id)
+        return self.saved_payload()
+
+    def export_saved_records(self, format_name: str) -> Dict[str, str]:
+        if self.saved_results is None or self.library is None:
+            raise ValueError("saved results are unavailable")
+        bundle_id = self._selected_bundle_id()
+        entry = self.library.find(bundle_id)
+        if entry is None:
+            raise ValueError("bundle was not found")
+        return self.saved_results.export(
+            bundle_id,
+            {
+                "bundle_id": entry.bundle_id,
+                "nickname": entry.nickname,
+                "schema_version": entry.schema_version,
+                "genome_build": entry.genome_build,
+                "generated_at": entry.generated_at,
+            },
+            format_name,
+        )
+
     def _accept_report(self, report: WorkspaceReport) -> None:
         bundle_id = ""
         nickname = ""
@@ -189,6 +316,25 @@ class LocalExplorerServer(ThreadingHTTPServer):
             with self.state_lock:
                 self.state_status = "validating"
                 self.archive_name = Path(archive).name
+            if self.workspace_root is None:
+                raise RuntimeError("local workspace is unavailable")
+            report = open_bundle(
+                archive,
+                self.workspace_root,
+                force_validate=self.force_validate,
+            )
+            self._accept_report(report)
+        except Exception as error:
+            with self.state_lock:
+                self.report = None
+                self.state_status = "failed"
+                self.state_error = str(error)
+                self.active_bundle_id = ""
+                self.active_nickname = ""
+                self.topics = []
+
+    def _open_path(self, archive: str) -> None:
+        try:
             if self.workspace_root is None:
                 raise RuntimeError("local workspace is unavailable")
             report = open_bundle(
@@ -297,6 +443,20 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
         if path == self.server.base_path + "/api/status":
             self._send_json(200, self.server.status_payload())
             return
+        if path == self.server.base_path + "/api/saved":
+            try:
+                self._send_json(200, self.server.saved_payload())
+            except ValueError as error:
+                self._send_json(409, {"error": str(error)})
+            return
+        if path == self.server.base_path + "/api/genome-map":
+            try:
+                self._send_json(200, self.server.genome_map_payload())
+            except ValueError as error:
+                self._send_json(409, {"error": str(error)})
+            except Exception:
+                self._send_json(500, {"error": "coverage summary could not be prepared"})
+            return
         self._reject()
 
     def do_POST(self) -> None:
@@ -307,6 +467,23 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
             self._reject(403)
             return
         path = urlsplit(self.path).path.rstrip("/")
+        if path == self.server.base_path + "/api/desktop/open":
+            supplied_token = self.headers.get("X-Genome-Explorer-Desktop", "")
+            if not secrets.compare_digest(supplied_token, self.server.desktop_token):
+                self._reject(403)
+                return
+            try:
+                payload = self._read_json_body()
+                archive = payload.get("archive")
+                if not isinstance(archive, str):
+                    raise ValueError("bundle selection is invalid")
+                started = self.server.begin_open_path(archive)
+                if not started:
+                    raise ValueError("another bundle is already opening")
+                self._send_json(202, self.server.status_payload())
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            return
         if path == self.server.base_path + "/api/shutdown":
             self._send_json(200, {"status": "stopped"})
             threading.Thread(target=self.server.shutdown, daemon=True).start()
@@ -350,6 +527,87 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
             except (ValueError, json.JSONDecodeError) as error:
                 self._send_json(400, {"error": str(error)})
             return
+        if path == self.server.base_path + "/api/saved/add":
+            try:
+                payload = self._read_json_body()
+                query = payload.get("query")
+                record = payload.get("record")
+                if not isinstance(query, str) or not isinstance(record, dict):
+                    raise ValueError("saved result request is invalid")
+                self._send_json(200, self.server.save_record(query, record))
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            return
+        if path == self.server.base_path + "/api/saved/remove":
+            try:
+                payload = self._read_json_body()
+                saved_id = payload.get("saved_id")
+                if not isinstance(saved_id, str) or not saved_id:
+                    raise ValueError("saved result request is invalid")
+                self._send_json(200, self.server.remove_saved_record(saved_id))
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            return
+        if path == self.server.base_path + "/api/saved/export":
+            supplied_token = self.headers.get("X-Genome-Explorer-Desktop", "")
+            if not secrets.compare_digest(supplied_token, self.server.desktop_token):
+                self._reject(403)
+                return
+            try:
+                payload = self._read_json_body()
+                format_name = payload.get("format")
+                if not isinstance(format_name, str):
+                    raise ValueError("export format is invalid")
+                self._send_json(
+                    200,
+                    self.server.export_saved_records(format_name),
+                )
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            return
+        if path == self.server.base_path + "/api/region-browser":
+            try:
+                payload = self._read_json_body()
+                query = payload.get("query")
+                chrom = payload.get("chrom")
+                start = payload.get("start")
+                end = payload.get("end")
+                page = payload.get("page", 1)
+                if not isinstance(page, int) or isinstance(page, bool) or page < 1:
+                    raise ValueError("region browser page is invalid")
+                if query is not None:
+                    if (
+                        not isinstance(query, str)
+                        or len(query) > MAX_QUERY_CHARACTERS
+                        or any(value is not None for value in (chrom, start, end))
+                    ):
+                        raise ValueError("region browser query is invalid")
+                    result = self.server.region_browser_payload(
+                        query=query,
+                        page=page,
+                    )
+                else:
+                    integers = (start, end)
+                    if (
+                        not isinstance(chrom, str)
+                        or not all(
+                            isinstance(value, int) and not isinstance(value, bool)
+                            for value in integers
+                        )
+                    ):
+                        raise ValueError("region browser request is invalid")
+                    result = self.server.region_browser_payload(
+                        chrom=chrom,
+                        start=start,
+                        end=end,
+                        page=page,
+                    )
+                self._send_json(200, result)
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send_json(400, {"error": str(error)})
+            except Exception:
+                self._send_json(500, {"error": "region browser could not be loaded"})
+            return
         if path != self.server.base_path + "/api/search":
             self._reject()
             return
@@ -371,9 +629,26 @@ class LocalExplorerHandler(BaseHTTPRequestHandler):
             self._send_json(500, {"error": "search could not be completed"})
 
 
-def _run_server(server: LocalExplorerServer, open_browser: bool) -> None:
-    print("Genome Explorer ready: %s" % server.url, flush=True)
-    print("Press Ctrl-C to stop.", flush=True)
+def _run_server(
+    server: LocalExplorerServer,
+    open_browser: bool,
+    desktop_backend: bool = False,
+) -> None:
+    if desktop_backend:
+        print(
+            "GENOME_EXPLORER_READY "
+            + json.dumps(
+                {
+                    "url": server.url,
+                    "desktop_token": server.desktop_token,
+                },
+                separators=(",", ":"),
+            ),
+            flush=True,
+        )
+    else:
+        print("Genome Explorer ready: %s" % server.url, flush=True)
+        print("Press Ctrl-C to stop.", flush=True)
     if open_browser:
         threading.Timer(0.2, webbrowser.open, args=(server.url,)).start()
     try:
@@ -414,3 +689,13 @@ def serve_launcher(
         force_validate=force_validate,
     )
     _run_server(server, open_browser)
+
+
+def serve_desktop(workspace_root: Path, force_validate: bool, port: int) -> None:
+    server = LocalExplorerServer(
+        None,
+        port,
+        workspace_root=workspace_root,
+        force_validate=force_validate,
+    )
+    _run_server(server, open_browser=False, desktop_backend=True)

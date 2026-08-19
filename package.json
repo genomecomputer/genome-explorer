@@ -1,0 +1,58 @@
+{
+  "name": "@genomecomputer/genome-explorer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private offline search for compatible .genome bundles",
+  "author": "Genome Computer",
+  "main": ".electron-dist/main.js",
+  "scripts": {
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc -p tsconfig.electron.json --noEmit",
+    "dev": "npm run build:electron && electron .",
+    "test:python": "node scripts/run-python-tests.mjs",
+    "test": "npm run typecheck && npm run build:electron && node --test .electron-dist/*.test.js && npm run test:python",
+    "test:e2e": "npm run build:electron && playwright test",
+    "build:engine": "./prototype/build engine",
+    "package": "npm run build:electron && npm run build:engine && electron-builder --dir",
+    "dist": "npm run build:electron && npm run build:engine && electron-builder"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "26.2.0",
+    "electron": "43.4.0",
+    "electron-builder": "26.15.3",
+    "typescript": "7.0.2"
+  },
+  "build": {
+    "appId": "org.genomecomputer.genome-explorer",
+    "productName": "Genome Explorer",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      ".electron-dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/genome-explorer-engine",
+        "to": "engine"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.medical",
+      "icon": "assets/app-icon.png",
+      "target": ["zip"]
+    },
+    "win": {
+      "icon": "assets/app-icon.png",
+      "target": ["portable"]
+    },
+    "linux": {
+      "category": "Science",
+      "icon": "assets/app-icon.png",
+      "target": ["AppImage"]
+    }
+  }
+}

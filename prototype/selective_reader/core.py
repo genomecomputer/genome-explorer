@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import shutil
 import tarfile
@@ -14,12 +15,14 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import duckdb
 
-
-SUPPORTED_SCHEMA_VERSIONS = {"1.0.0"}
+SUPPORTED_SCHEMA_MAJOR = 1
 CHUNK_SIZE = 1024 * 1024
 MAX_MANIFEST_BYTES = 5 * 1024 * 1024
 RECEIPT_FILENAME = ".validation-receipt.json"
 RECEIPT_VERSION = 1
+SCHEMA_VERSION_PATTERN = re.compile(
+    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+)
 COORDINATE_PATTERN = re.compile(
     r"^(?:chr)?(?P<chrom>[0-9]+|X|Y|M):(?P<pos>[0-9]+)"
     r"(?::(?P<ref>[ACGT]+):(?P<alt>[ACGT]+))?$",
@@ -53,6 +56,7 @@ class WorkspaceReport:
 class SearchResult:
     query: str
     query_kind: str
+    answerability: Dict[str, Any]
     hits: List[Dict[str, Any]]
     elapsed_seconds: float
 
@@ -109,6 +113,13 @@ def _read_manifest(archive: Path) -> Tuple[str, bytes, Dict[str, Any]]:
 
 def _manifest_identity(manifest_bytes: bytes) -> str:
     return hashlib.sha256(manifest_bytes).hexdigest()[:20]
+
+
+def _supports_schema_version(schema_version: Any) -> bool:
+    if not isinstance(schema_version, str):
+        return False
+    match = SCHEMA_VERSION_PATTERN.fullmatch(schema_version)
+    return match is not None and int(match.group(1)) == SUPPORTED_SCHEMA_MAJOR
 
 
 def _archive_fingerprint(archive: Path) -> Dict[str, Any]:
@@ -249,8 +260,11 @@ def open_bundle(
 
     root_name, manifest_bytes, manifest = _read_manifest(archive)
     schema_version = manifest.get("schema_version")
-    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
-        raise ValueError("unsupported schema version: %r" % schema_version)
+    if not _supports_schema_version(schema_version):
+        raise ValueError(
+            "unsupported schema version: %r; Genome Explorer supports v1.x bundles"
+            % schema_version
+        )
 
     declared = manifest.get("files")
     if not isinstance(declared, dict):
@@ -439,6 +453,345 @@ def _rows(cursor: Any, section: str) -> List[Dict[str, Any]]:
     ]
 
 
+def _view_columns(connection: Any, view_name: str) -> set[str]:
+    return {
+        str(row[1])
+        for row in connection.execute("PRAGMA table_info('%s')" % view_name).fetchall()
+    }
+
+
+def _bundle_context(workspace: Path) -> Dict[str, Any]:
+    manifest: Dict[str, Any] = {}
+    manifest_path = workspace / "manifest.json"
+    if manifest_path.is_file():
+        try:
+            candidate = json.loads(manifest_path.read_text())
+            if isinstance(candidate, dict):
+                manifest = candidate
+        except (OSError, ValueError, json.JSONDecodeError):
+            manifest = {}
+
+    schema_version = manifest.get("schema_version")
+    schema_match = (
+        SCHEMA_VERSION_PATTERN.fullmatch(schema_version)
+        if isinstance(schema_version, str)
+        else None
+    )
+    schema_minor = (
+        (int(schema_match.group(1)), int(schema_match.group(2)))
+        if schema_match is not None
+        else None
+    )
+
+    omissions_recorded = False
+    omissions_path = workspace / "omissions.json"
+    if omissions_path.is_file():
+        try:
+            payload = json.loads(omissions_path.read_text())
+            omissions = payload.get("omissions") if isinstance(payload, dict) else None
+            omissions_recorded = isinstance(omissions, list) and bool(omissions)
+        except (OSError, ValueError, json.JSONDecodeError):
+            omissions_recorded = False
+
+    return {
+        "schema_version": schema_version if isinstance(schema_version, str) else None,
+        "schema_minor": schema_minor,
+        "omissions_recorded": omissions_recorded,
+    }
+
+
+def _answerability(
+    state: str,
+    query_kind: str,
+    basis: str,
+    reason: str,
+    **details: Any,
+) -> Dict[str, Any]:
+    return {
+        "state": state,
+        "scope": query_kind,
+        "basis": basis,
+        "reason": reason,
+        **details,
+    }
+
+
+def _column_expression(columns: set[str], name: str, value_type: str) -> str:
+    if name in columns:
+        return name
+    return "CAST(NULL AS %s)" % value_type
+
+
+def _coordinate_callability(
+    connection: Any,
+    available: set[str],
+    chrom: str,
+    pos: int,
+) -> Optional[Dict[str, Any]]:
+    sources = (
+        (
+            "callability",
+            "callability.parquet",
+            "pos = ?",
+        ),
+        (
+            "callable_regions",
+            "callable_regions.parquet",
+            "start_pos <= ? AND end_pos >= ?",
+        ),
+    )
+    for view_name, source_name, position_predicate in sources:
+        if view_name not in available:
+            continue
+        columns = _view_columns(connection, view_name)
+        required = {"chrom", "callable"}
+        if view_name == "callability":
+            required.add("pos")
+        else:
+            required.update({"start_pos", "end_pos"})
+        if not required.issubset(columns):
+            continue
+
+        parameters: List[Any] = [chrom]
+        parameters.extend([pos, pos] if view_name == "callable_regions" else [pos])
+        cursor = connection.execute(
+            """
+            SELECT callable,
+                   %s AS reference_observed,
+                   %s AS call_confidence,
+                   %s AS evidence_scope,
+                   %s AS assay_scope
+            FROM %s
+            WHERE lower(replace(chrom, 'chr', '')) = lower(replace(?, 'chr', ''))
+              AND %s
+            LIMIT 25
+            """
+            % (
+                _column_expression(columns, "reference_observed", "BOOLEAN"),
+                _column_expression(columns, "call_confidence", "VARCHAR"),
+                _column_expression(columns, "evidence_scope", "VARCHAR"),
+                _column_expression(columns, "assay_scope", "VARCHAR"),
+                view_name,
+                position_predicate,
+            ),
+            parameters,
+        )
+        rows = _rows(cursor, "callability")
+        if not rows:
+            continue
+
+        callable_values = {
+            row["callable"] for row in rows if row.get("callable") is not None
+        }
+        evidence = {
+            "source": source_name,
+            "callable": next(iter(callable_values)) if len(callable_values) == 1 else None,
+            "reference_observed": any(
+                row.get("reference_observed") is True for row in rows
+            ),
+            "call_confidence": next(
+                (
+                    row.get("call_confidence")
+                    for row in rows
+                    if row.get("call_confidence") is not None
+                ),
+                None,
+            ),
+            "evidence_scope": next(
+                (
+                    row.get("evidence_scope")
+                    for row in rows
+                    if row.get("evidence_scope") is not None
+                ),
+                None,
+            ),
+            "assay_scope": next(
+                (
+                    row.get("assay_scope")
+                    for row in rows
+                    if row.get("assay_scope") is not None
+                ),
+                None,
+            ),
+        }
+        if callable_values == {True}:
+            return _answerability(
+                "callable_no_matching_alternate",
+                "coordinate",
+                source_name,
+                "callable_position_without_matching_variant",
+                callability=evidence,
+            )
+        if callable_values == {False}:
+            return _answerability(
+                "not_callable",
+                "coordinate",
+                source_name,
+                "position_not_reliably_callable",
+                callability=evidence,
+            )
+        return _answerability(
+            "insufficient_bundle_data",
+            "coordinate",
+            source_name,
+            "callability_is_unknown_or_conflicting",
+            callability=evidence,
+        )
+    return None
+
+
+def _answerability_for_search(
+    connection: Any,
+    workspace: Path,
+    available: set[str],
+    query: str,
+    query_kind: str,
+    hits: List[Dict[str, Any]],
+    coordinate: Optional[re.Match[str]],
+) -> Dict[str, Any]:
+    if hits:
+        return _answerability(
+            "recorded",
+            query_kind,
+            "bundle_records",
+            "matching_bundle_records_found",
+            sections=sorted({str(hit["section"]) for hit in hits}),
+        )
+
+    if query_kind == "term":
+        from .topics import topic_for_query
+
+        topic = topic_for_query(str(workspace), query)
+        if topic is not None and isinstance(topic.get("answerability"), dict):
+            return topic["answerability"]
+
+    context = _bundle_context(workspace)
+    if query_kind == "coordinate" and coordinate is not None:
+        chrom = "chr" + coordinate.group("chrom").upper()
+        callability = _coordinate_callability(
+            connection,
+            available,
+            chrom,
+            int(coordinate.group("pos")),
+        )
+        if callability is not None:
+            return callability
+
+        has_callability_source = bool(
+            {"callability", "callable_regions"}.intersection(available)
+        )
+        if has_callability_source:
+            return _answerability(
+                "insufficient_bundle_data",
+                query_kind,
+                "callability",
+                "no_site_level_callability_record",
+                omissions_recorded=context["omissions_recorded"],
+            )
+
+        schema_minor = context["schema_minor"]
+        if schema_minor is not None and schema_minor < (1, 1):
+            return _answerability(
+                "unsupported_bundle_version",
+                query_kind,
+                "schema_version",
+                "site_callability_not_available_in_bundle_version",
+                schema_version=context["schema_version"],
+            )
+        return _answerability(
+            "analysis_not_included",
+            query_kind,
+            "manifest",
+            "site_callability_not_included",
+            schema_version=context["schema_version"],
+        )
+
+    reason = (
+        "rsid_has_no_offline_coordinate_mapping"
+        if query_kind == "rsid"
+        else "no_matching_record_without_complete_coverage_evidence"
+    )
+    return _answerability(
+        "insufficient_bundle_data",
+        query_kind,
+        "bundle_records",
+        reason,
+        omissions_recorded=context["omissions_recorded"],
+    )
+
+
+def _gwas_column(
+    columns: set[str], *candidates: str, fallback: str = "CAST(NULL AS VARCHAR)"
+) -> str:
+    for candidate in candidates:
+        if candidate in columns:
+            return "gwas.%s" % candidate
+    return fallback
+
+
+def _gwas_coalesce(
+    columns: set[str], candidates: Tuple[str, ...], fallback: str
+) -> str:
+    expressions = [
+        "gwas.%s" % candidate for candidate in candidates if candidate in columns
+    ]
+    if not expressions:
+        return fallback
+    return "COALESCE(%s)" % ", ".join(expressions + [fallback])
+
+
+def _gwas_projection(columns: set[str]) -> str:
+    if "study_pmids" in columns:
+        study_pmids = "gwas.study_pmids"
+    elif "pubmed_id" in columns:
+        study_pmids = (
+            "CASE WHEN gwas.pubmed_id IS NULL THEN []::VARCHAR[] "
+            "ELSE [CAST(gwas.pubmed_id AS VARCHAR)] END"
+        )
+    else:
+        study_pmids = "[]::VARCHAR[]"
+
+    return """
+        gwas.variant_id,
+        %s AS rsid,
+        %s AS gene,
+        %s AS chrom,
+        %s AS pos,
+        %s AS ref,
+        %s AS alt,
+        gwas.trait,
+        gwas.effect_allele,
+        gwas.effect_size,
+        gwas.effect_type,
+        gwas.p_value,
+        %s AS source,
+        %s AS study_pmids,
+        %s AS study_accession,
+        %s AS source_version,
+        %s AS effect_allele_in_call
+    """ % (
+        _gwas_coalesce(columns, ("rsid",), "person_linked.rsid"),
+        _gwas_coalesce(
+            columns,
+            ("gene", "gene_symbol", "mapped_gene", "reported_gene"),
+            "person_linked.gene",
+        ),
+        _gwas_coalesce(columns, ("chrom", "variant_chrom"), "person_linked.chrom"),
+        _gwas_coalesce(columns, ("pos", "variant_pos"), "person_linked.pos"),
+        _gwas_coalesce(columns, ("ref",), "person_linked.ref"),
+        _gwas_coalesce(columns, ("alt",), "person_linked.alt"),
+        _gwas_column(columns, "source"),
+        study_pmids,
+        _gwas_column(columns, "study_accession"),
+        _gwas_column(columns, "source_version", "catalog_version"),
+        _gwas_column(
+            columns,
+            "effect_allele_in_call",
+            fallback="CAST(NULL AS BOOLEAN)",
+        ),
+    )
+
+
 def _variant_projection() -> str:
     return """
         variant_id,
@@ -453,9 +806,98 @@ def _variant_projection() -> str:
         gene.symbol AS gene,
         consequence.hgvsp AS hgvsp,
         pathogenicity.clinvar_significance AS clinvar_significance,
+        pathogenicity.clinvar_has_conflicts AS clinvar_has_conflicts,
+        pathogenicity.clinvar_conflict_summary AS clinvar_conflict_summary,
         pathogenicity.clinvar_review_stars AS clinvar_review_stars,
+        pathogenicity.clinvar_submitters_count AS clinvar_submitters_count,
         pathogenicity.clinvar_id AS clinvar_id,
         clinical_grade
+    """
+
+
+def variants_for_region(
+    workspace_path: str,
+    chrom: str,
+    start: int,
+    end: int,
+    page: int = 1,
+    page_size: int = 25,
+) -> Dict[str, Any]:
+    """Return one stable, bounded page of person-specific variant rows."""
+    if not chrom or start < 1 or end < start:
+        raise ValueError("region browser locus is invalid")
+    if page < 1 or page_size < 1 or page_size > 100:
+        raise ValueError("region browser page is invalid")
+
+    workspace = Path(workspace_path).resolve()
+    variants = workspace / "variants.parquet"
+    if not variants.is_dir():
+        raise ValueError("workspace does not contain variants.parquet")
+
+    connection = duckdb.connect()
+    try:
+        connection.execute("PRAGMA threads=2")
+        variants_path = _sql_path(variants)
+        connection.execute(
+            "CREATE VIEW variants AS SELECT * FROM read_parquet("
+            "'%s/**/*.parquet', hive_partitioning=true)" % variants_path
+        )
+        predicate = (
+            "lower(replace(chrom, 'chr', '')) = "
+            "lower(replace(?, 'chr', '')) AND pos BETWEEN ? AND ?"
+        )
+        parameters: List[Any] = [chrom, start, end]
+        total = int(
+            connection.execute(
+                "SELECT count(*)::BIGINT FROM variants WHERE " + predicate,
+                parameters,
+            ).fetchone()[0]
+        )
+        page_count = max(1, math.ceil(total / page_size))
+        if total and page > page_count:
+            raise ValueError("region browser page is outside the selected locus")
+        offset = (page - 1) * page_size
+        cursor = connection.execute(
+            "SELECT %s FROM variants WHERE %s "
+            "ORDER BY pos, variant_id LIMIT ? OFFSET ?"
+            % (_variant_projection(), predicate),
+            [*parameters, page_size, offset],
+        )
+        return {
+            "chrom": chrom,
+            "start": start,
+            "end": end,
+            "page": page,
+            "page_size": page_size,
+            "page_count": page_count,
+            "total": total,
+            "hits": _rows(cursor, "variants"),
+        }
+    finally:
+        connection.close()
+
+
+def _trait_variant_projection() -> str:
+    return """
+        variant_id,
+        rsid,
+        chrom,
+        pos,
+        ref,
+        alt,
+        list_transform(
+            genotype.gt,
+            allele_index -> CASE
+                WHEN allele_index = 0 THEN ref
+                WHEN allele_index = 1 THEN alt
+                ELSE '?'
+            END
+        ) AS called_alleles,
+        genotype.zygosity AS zygosity,
+        quality.call_confidence AS call_confidence,
+        gene.symbol AS gene,
+        trait_associations.traits AS recorded_traits,
+        trait_associations.study_pmids AS study_pmids
     """
 
 
@@ -471,12 +913,24 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
         "CREATE VIEW variants AS SELECT * FROM read_parquet("
         "'%s/**/*.parquet', hive_partitioning=true)" % _sql_path(variants)
     )
+    has_trait_associations = True
+    try:
+        connection.execute(
+            "SELECT trait_associations.is_gwas_hit, "
+            "trait_associations.traits FROM variants LIMIT 0"
+        )
+    except duckdb.Error:
+        has_trait_associations = False
 
     table_files = {
+        "clinical_findings": workspace / "clinical_findings.parquet",
+        "clinical_evidence": workspace / "clinical_evidence.parquet",
         "pharmacogenomics": workspace / "pharmacogenomics.parquet",
         "prs": workspace / "prs.parquet",
         "gwas_associations": workspace / "gwas_associations.parquet",
         "gene_index": workspace / "gene_index.parquet",
+        "callability": workspace / "callability.parquet",
+        "callable_regions": workspace / "callable_regions.parquet",
     }
     available = set()
     for table, path in table_files.items():
@@ -570,26 +1024,198 @@ def search_workspace(workspace_path: str, query: str) -> SearchResult:
             )
             hits.extend(_rows(cursor, "polygenic_scores"))
 
-        if "gwas_associations" in available:
+        if "clinical_findings" in available:
+            evidence_projection = ", NULL AS evidence"
+            source_predicate = ""
+            source_parameters: List[Any] = []
+            if "clinical_evidence" in available:
+                evidence_projection = """,
+                    (
+                        SELECT list(
+                            struct_pack(
+                                evidence_id := evidence.evidence_id,
+                                source := evidence.source,
+                                source_record_id := evidence.source_record_id,
+                                source_version := evidence.source_version,
+                                assertion := evidence.assertion,
+                                review_status := evidence.review_status,
+                                retrieved_at := CAST(evidence.retrieved_at AS VARCHAR)
+                            )
+                            ORDER BY evidence.evidence_id
+                        )
+                        FROM clinical_evidence AS evidence
+                        WHERE list_contains(findings.evidence_ids, evidence.evidence_id)
+                    ) AS evidence
+                """
+                source_predicate = """
+                    OR EXISTS (
+                        SELECT 1
+                        FROM clinical_evidence AS evidence
+                        WHERE list_contains(findings.evidence_ids, evidence.evidence_id)
+                          AND lower(evidence.source) LIKE '%' || lower(?) || '%'
+                    )
+                """
+                source_parameters.append(normalized_query)
+
+            list_all = normalized_query.lower() in {
+                "clinical",
+                "clinical finding",
+                "clinical findings",
+            }
+            term_predicate = ""
+            parameters: List[Any] = []
+            if not list_all:
+                term_predicate = f"""
+                    AND (
+                        lower(findings.condition) LIKE '%' || lower(?) || '%'
+                        OR upper(COALESCE(findings.gene_symbol, '')) = upper(?)
+                        OR lower(COALESCE(findings.classification, '')) LIKE '%' || lower(?) || '%'
+                        OR lower(findings.claim_type) LIKE '%' || lower(?) || '%'
+                        OR lower(COALESCE(findings.variant_id, '')) = lower(?)
+                        {source_predicate}
+                    )
+                """
+                parameters = [normalized_query] * 5 + source_parameters
+
             cursor = connection.execute(
                 """
-                SELECT variant_id, rsid, gene, chrom, pos, ref, alt, trait,
-                       effect_allele, effect_size, effect_type, p_value,
-                       source, pubmed_id, study_accession, catalog_version
-                FROM gwas_associations
-                WHERE lower(trait) LIKE '%' || lower(?) || '%'
-                   OR lower(COALESCE(mapped_trait, '')) LIKE '%' || lower(?) || '%'
-                   OR lower(COALESCE(reported_trait, '')) LIKE '%' || lower(?) || '%'
+                SELECT findings.finding_id,
+                       findings.condition,
+                       findings.claim_type,
+                       findings.classification,
+                       findings.clinical_grade,
+                       findings.variant_id,
+                       COALESCE(findings.gene_symbol, variants.gene.symbol) AS gene_symbol,
+                       variants.rsid,
+                       CASE
+                           WHEN variants.variant_id IS NULL THEN NULL
+                           ELSE list_transform(
+                               variants.genotype.gt,
+                               allele_index -> CASE
+                                   WHEN allele_index = 0 THEN variants.ref
+                                   WHEN allele_index = 1 THEN variants.alt
+                                   ELSE '?'
+                               END
+                           )
+                       END AS called_alleles,
+                       variants.quality.call_confidence AS call_confidence,
+                       variants.pathogenicity.clinvar_significance AS clinvar_significance,
+                       variants.pathogenicity.clinvar_has_conflicts AS clinvar_has_conflicts,
+                       variants.pathogenicity.clinvar_conflict_summary AS clinvar_conflict_summary,
+                       variants.pathogenicity.clinvar_review_stars AS clinvar_review_stars,
+                       variants.pathogenicity.clinvar_submitters_count AS clinvar_submitters_count,
+                       variants.pathogenicity.clinvar_id AS clinvar_id,
+                       findings.evidence_ids
+                       %s
+                FROM clinical_findings AS findings
+                LEFT JOIN variants
+                  ON variants.variant_id = findings.variant_id
+                WHERE findings.clinical_grade = true
+                %s
+                ORDER BY findings.condition, findings.finding_id
                 LIMIT 25
-                """,
-                [normalized_query, normalized_query, normalized_query],
+                """ % (evidence_projection, term_predicate),
+                parameters,
+            )
+            hits.extend(_rows(cursor, "clinical_findings"))
+
+        if has_trait_associations:
+            try:
+                cursor = connection.execute(
+                    """
+                    SELECT %s,
+                           list_slice(
+                               list_filter(
+                                   trait_associations.traits,
+                                   trait -> lower(trait) LIKE '%%' || lower(?) || '%%'
+                               ),
+                               1,
+                               3
+                           ) AS matched_traits
+                    FROM variants
+                    WHERE trait_associations.is_gwas_hit
+                      AND EXISTS (
+                          SELECT 1
+                          FROM UNNEST(trait_associations.traits) AS annotation(value)
+                          WHERE lower(value) LIKE '%%' || lower(?) || '%%'
+                      )
+                    ORDER BY chrom, pos
+                    LIMIT 25
+                    """ % _trait_variant_projection(),
+                    [normalized_query, normalized_query],
+                )
+            except duckdb.Error:
+                has_trait_associations = False
+            else:
+                hits.extend(_rows(cursor, "trait_variants"))
+
+        if "gwas_associations" in available and has_trait_associations:
+            gwas_columns = _view_columns(connection, "gwas_associations")
+            join_predicate = "gwas.variant_id = person_linked.variant_id"
+            if "rsid" in gwas_columns:
+                join_predicate += """
+                    OR (
+                        gwas.rsid IS NOT NULL
+                        AND gwas.rsid = person_linked.rsid
+                    )
+                """
+            term_columns = ["trait"] + [
+                column
+                for column in ("mapped_trait", "reported_trait")
+                if column in gwas_columns
+            ]
+            term_predicate = " OR ".join(
+                "lower(COALESCE(CAST(gwas.%s AS VARCHAR), '')) "
+                "LIKE '%%' || lower(?) || '%%'" % column
+                for column in term_columns
+            )
+            cursor = connection.execute(
+                """
+                WITH person_linked AS (
+                    SELECT DISTINCT variant_id, rsid, chrom, pos, ref, alt,
+                                    gene.symbol AS gene
+                    FROM variants
+                    WHERE trait_associations.is_gwas_hit
+                      AND EXISTS (
+                          SELECT 1
+                          FROM UNNEST(trait_associations.traits) AS annotation(value)
+                          WHERE lower(value) LIKE '%%' || lower(?) || '%%'
+                      )
+                )
+                SELECT DISTINCT %s
+                FROM gwas_associations AS gwas
+                JOIN person_linked
+                  ON (%s)
+                WHERE %s
+                ORDER BY rsid, trait
+                LIMIT 25
+                """ % (
+                    _gwas_projection(gwas_columns),
+                    join_predicate,
+                    term_predicate,
+                ),
+                [normalized_query] * (1 + len(term_columns)),
             )
             hits.extend(_rows(cursor, "gwas"))
 
+    answerability = _answerability_for_search(
+        connection,
+        workspace,
+        available,
+        normalized_query,
+        query_kind,
+        hits,
+        coordinate,
+    )
+    from .saved_results import saved_result_id
+
+    for hit in hits:
+        hit["_record_key"] = saved_result_id(hit)
     connection.close()
     return SearchResult(
         query=normalized_query,
         query_kind=query_kind,
+        answerability=answerability,
         hits=hits,
         elapsed_seconds=round(time.monotonic() - started, 3),
     )

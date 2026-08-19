@@ -17,13 +17,11 @@ fi
 cd "$repo_dir"
 
 case "${1:-cli}" in
-  app)
+  engine)
     exec "$runtime_dir/bin/python" -m PyInstaller \
       --noconfirm \
       --clean \
-      --windowed \
-      --name "Genome Explorer" \
-      --osx-bundle-identifier org.genomecomputer.genome-explorer.prototype \
+      --name genome-explorer-engine \
       --paths "$repo_dir" \
       --hidden-import uuid \
       prototype/entrypoint.py
@@ -39,7 +37,7 @@ case "${1:-cli}" in
       prototype/entrypoint.py
     ;;
   *)
-    echo "usage: ./prototype/build [app|cli]" >&2
+    echo "usage: ./prototype/build [engine|cli]" >&2
     exit 2
     ;;
 esac

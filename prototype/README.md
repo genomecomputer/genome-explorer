@@ -10,30 +10,38 @@ Run it with:
 ./prototype/run /path/to/sample.genome.tar.gz
 ```
 
-Open the local browser interface with:
+Open the optional local browser interface from the CLI with:
 
 ```sh
 ./prototype/run /path/to/sample.genome.tar.gz --serve
 ```
 
-Build a double-clickable macOS app with:
+Run the desktop application for development with:
 
 ```sh
-./prototype/build app
-open "./dist/Genome Explorer.app"
+npm install
+npm run dev
 ```
 
-Opening the app without arguments first opens a welcome screen in the default
-browser. Its Choose genome bundle button opens the native file picker, then the
-same page shows local validation and the private explorer. The browser never
-copies the source archive. The retained workspace is stored under
-`~/Library/Application Support/Genome Explorer/`.
+The Electron application opens a welcome screen in its own window. Add genome
+bundle opens a native file picker, then the same window shows local validation
+and the private explorer. Closing the application also stops its bundled local
+engine. The source archive is never modified or uploaded.
+
+Create an unpacked desktop build with:
+
+```sh
+npm run package
+```
+
+The build includes its own Python genome engine and DuckDB dependency. Release
+users do not need Python, Node.js, DuckDB, a terminal, an account, or an API key.
 
 The interface leads with everyday medication, trait, and condition searches.
 It restates only fields recorded in the bundle and keeps genomic identifiers,
 coordinates, alleles, and other raw fields inside collapsed technical details.
 
-Build a standalone command-line executable with:
+Build a standalone command-line executable separately with:
 
 ```sh
 ./prototype/build cli

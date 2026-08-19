@@ -1,4 +1,11 @@
 .genome-explorer/
+.DS_Store
+node_modules/
+.electron-dist/
+/release/
+/release-*/
+/test-results/
+/playwright-report/
 /build/
 /dist/
 /*.spec
