@@ -548,6 +548,9 @@ PAGE = r'''<!doctype html>
     .sidebar-nav { display: grid; gap: 3px; margin-top: 23px; }
     .sidebar-view-list { display: grid; gap: 3px; }
     .sidebar-nav .sidebar-label { margin: 0 9px 7px; }
+    .sidebar-nav .sidebar-advanced-label {
+      margin-top: 15px; padding-top: 17px; border-top: 1px solid rgba(255,255,255,.14);
+    }
     .sidebar-nav-button {
       display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 7px; width: 100%;
       min-height: 38px; padding: 0 9px; color: #c9ddd3; background: transparent; border: 0; border-radius: 5px;
@@ -637,11 +640,12 @@ PAGE = r'''<!doctype html>
               <span class="sidebar-nav-index">05</span><span>Traits</span><span class="sidebar-nav-count"></span>
             </button>
           </div>
-          <button class="sidebar-nav-button" id="sidebar-map" type="button">
-            <span class="sidebar-nav-index">06</span><span>Region browser</span>
-          </button>
           <button class="sidebar-nav-button" id="sidebar-saved" type="button">
-            <span class="sidebar-nav-index">07</span><span>Saved results</span><span class="sidebar-nav-count" id="sidebar-saved-count">0</span>
+            <span class="sidebar-nav-index">06</span><span>Saved results</span><span class="sidebar-nav-count" id="sidebar-saved-count">0</span>
+          </button>
+          <p class="sidebar-label sidebar-advanced-label">Advanced tools</p>
+          <button class="sidebar-nav-button" id="sidebar-map" type="button">
+            <span class="sidebar-nav-index">07</span><span>Region browser</span>
           </button>
         </nav>
         <div class="sidebar-bundle">
